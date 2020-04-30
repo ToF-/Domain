@@ -24,15 +24,28 @@ dependencies:
 
 library:
   source-dirs: src
+  ghc-options:
+  - -freverse-errors
+  - -Wall
+  - -Werror
+  - -Wincomplete-patterns
+  dependencies:
+  - split
+
+
 
 executables:
   domain-exe:
     main:                Main.hs
     source-dirs:         app
     ghc-options:
+    - -freverse-errors
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    - -Wall
+    - -Werror
+    - -Wincomplete-patterns
     dependencies:
     - domain
 
@@ -41,8 +54,13 @@ tests:
     main:                Spec.hs
     source-dirs:         test
     ghc-options:
+    - -freverse-errors
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    - -Wall
+    - -Werror
+    - -Wincomplete-patterns
     dependencies:
     - domain
+    - hspec
