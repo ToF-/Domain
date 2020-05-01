@@ -35,7 +35,7 @@ library:
 
 
 executables:
-  domain-exe:
+  domain:
     main:                Main.hs
     source-dirs:         app
     ghc-options:

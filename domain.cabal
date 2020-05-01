@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 440fdc80a6f0a89eb5018128e9eb0f859a7d6d9bc02fea6198db92455622877c
+-- hash: ad774a5de2ce08bfdd6783652e387774b4cacba625ef0d7c02f1cbf276f4b783
 
 name:           domain
 version:        0.1.0.0
@@ -38,7 +38,7 @@ library
     , split
   default-language: Haskell2010
 
-executable domain-exe
+executable domain
   main-is: Main.hs
   other-modules:
       Paths_domain
