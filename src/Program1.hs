@@ -37,10 +37,10 @@ summarize = map summary
           . sortBy  ( compare `on` transactionCategory )
     where
     summary :: [Transaction] -> Summary
-    summary txs = Summary (label txs) (total txs) 
+    summary txs = Summary (category txs) (total txs) 
         where
-        label = transactionCategory . head
-        total = sum . map transactionAmount
+        category = transactionCategory . head
+        total    = sum . map transactionAmount
     
 -- reads the given transaction file, outputs its summary
 program1 :: IO ()

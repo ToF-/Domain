@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: ad774a5de2ce08bfdd6783652e387774b4cacba625ef0d7c02f1cbf276f4b783
+-- hash: 3434a5ed4cc12b33128405f7806f4d4c6d6af1e09dd0a6f414295734e707fc39
 
 name:           domain
 version:        0.1.0.0
@@ -28,6 +28,7 @@ source-repository head
 library
   exposed-modules:
       Program1
+      Program2
   other-modules:
       Paths_domain
   hs-source-dirs:
@@ -35,6 +36,7 @@ library
   ghc-options: -freverse-errors -Wall -Werror -Wincomplete-patterns
   build-depends:
       base >=4.7 && <5
+    , mtl
     , split
   default-language: Haskell2010
 
