@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 3434a5ed4cc12b33128405f7806f4d4c6d6af1e09dd0a6f414295734e707fc39
+-- hash: e84baeed8123da6b163c0f382e1370dc3f3a45e076f3ccfd1df0780bc2742cfe
 
 name:           domain
 version:        0.1.0.0
@@ -29,6 +29,7 @@ library
   exposed-modules:
       Program1
       Program2
+      Program3
   other-modules:
       Paths_domain
   hs-source-dirs:
