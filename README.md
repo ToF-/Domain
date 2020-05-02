@@ -156,6 +156,83 @@ program2 = do
 main :: IO ()
 main = program2
 ```
+The construct:
+```haskell
+content >>= readTransaction
+```
+Seems to suggest a way that we could use to bind all the functions of type `a -> Domain a` together. Indeed for example, these functions:
+```haskell
+checkNotEmpty :: String -> Domain String
+checkNotEmpty "" = Left "empty parameter"
+checkNotEmpty s  = Right s
+
+getDouble :: String -> Domain Double
+getDouble s = case reads s of
+    []        -> Left "not a number"
+    ((d,_):_) -> Right d
+
+checkPositive :: Double -> Domain Double
+checkPositive d 
+    | d < 0     = Left "negative number"
+    | otherwise = Right d
+```
+Could be used in combination, forming in a single function the equivalent of 3 `case ... of` branchings.
+```haskell
+getSquareRoot :: String -> Domain Double
+getSquareRoot s = checkNotEmpty s 
+                >>= getDouble
+                >>= checkPositive
+                >>= return . sqrt
+
+main :: IO ()
+main = do
+    s <- getLine
+    case getSquareRoot s of
+        Left msg -> putStrLn $ "Error: " ++ s 
+        Right d  -> print d
+```
+
+Could it possible to chain all our domain functions, like this ?
+
+```haskell
+wrongProgram :: IO () -- won't compile
+wrongProgram = do
+    fileName <- getFileNameArg 
+    content <- getFileContent fileName
+    result <- fmap summarize $ readTransactions content
+    case result of
+        Left msg   -> putStrLn msg
+        Right sums -> putStrLn $ unlines $ map show $ sums
+```
+
+No, because `getFileNameArg` and `getFileContent` are `IO (Domain a)` functions and not `Domain a` function.
+
+To understand this, we can rewrite this wrong program using `>>=` instead of left arrows:
+```haskell
+wrongProgram :: IO () -- won't compile
+wrongProgram = do
+    result <- getFileNameArg >>= getFileContent >>= readTransactions >>= return . summarize
+    case result of
+        Left msg   -> putStrLn msg
+        Right sums -> putStrLn $ unlines $ map show $ sums
+```
+and then examine the type of the functions we are trying to bind:
+```
+:t (>>=) :: forall a b. m a -> (a -> m b) -> m b 
+
+:t getFileNameArg :: IO (Domain String)
+:t (getFileNameArg >>=) :: (Domain String -> IO b) -> IO b
+:t getFileContent :: FilePath -> IO (Domain String)
+
+:t (getFileContent >>=) :: (Domain String -> IO b) -> IO b
+:t readTransactions :: String -> Domain [Transaction]
+:t (readTransactions >>=) :: ([Transaction] -> Domain b) -> Domain b
+:t return summarize :: [Transactions] -> Domain [SummaryLine]
+```
+
+
+
+
 
 
 

@@ -77,13 +77,9 @@ getFileNameArg = do
 
 program2 :: IO ()
 program2 = do
-    fileName <- getFileNameArg 
-    case fileName of
-        Left msg -> putStrLn msg
-        Right fp -> do 
-            content <- getFileContent fp
-            case (content >>= readTransactions) of
-                Left msg -> putStrLn msg
-                Right txs -> putStrLn $ unlines $ map show $ summarize txs
+    result <- getFileNameArg >>= getFileContent >>= readTransactions >>= return . summarize
+    case result of
+        Left msg   -> putStrLn msg
+        Right sums -> putStrLn $ unlines $ map show $ sums
 
 
