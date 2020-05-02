@@ -11,7 +11,6 @@ data Transaction = Transaction { transactionCategory :: String
                                , transactionAmount   :: Double }
     deriving (Eq,Ord)
 
--- read transaction from a csv format line eg. "Books, 24.65"
 instance Read Transaction where
     readsPrec _ s = 
         case splitOn "," s of
@@ -20,24 +19,22 @@ instance Read Transaction where
                      _ -> []
           _ -> []
 
-data Summary = Summary { summaryCategory :: String
-                       , summaryAmount   :: Double }
+data SummaryLine = SummaryLine { summaryCategory :: String
+                               , summaryAmount   :: Double }
 
--- show summary in a csv format line
-instance Show Summary where
+instance Show SummaryLine where
     show t = 
         (summaryCategory t) 
         ++ ", " 
         ++ show (summaryAmount t)
 
--- produce total amount per category
-summarize :: [Transaction] -> [Summary] 
+summarize :: [Transaction] -> [SummaryLine] 
 summarize = map summary 
           . groupBy ( (==)    `on` transactionCategory ) 
           . sortBy  ( compare `on` transactionCategory )
     where
-    summary :: [Transaction] -> Summary
-    summary txs = Summary (category txs) (total txs) 
+    summary :: [Transaction] -> SummaryLine
+    summary txs = SummaryLine (category txs) (total txs) 
         where
         category = transactionCategory . head
         total    = sum . map transactionAmount
