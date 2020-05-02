@@ -94,7 +94,68 @@ What could go wrong?
 - the file could contain data that it would fail to recognize as comma separated transaction fields
 - the file could be empty, in which case nothing would be output
 
-None of these conditions is adequately managed by our program. So let's change it.
+None of these conditions is adequately managed by our program, which means that given certain input, some of our function will not return a value, and the program will halt. Let's change this.
 
 ## Responding to failure conditions
+
+The way to deal with failure is to use data types that can represent it. We'll call `Domain a` the type of values that can be either a `Message` or a "normal" value of type _a_.
+```haskell
+type Message = String
+
+type Domain = Either Message
+```
+
+Our most frequent concern will be about the file data format, so let's create functions that will manage faulty csv lines:
+```haskell
+readTransaction :: String -> Domain Transaction
+readTransaction s = 
+    case reads s of
+      []        -> Left $ "incorrect csv format : " ++ s
+      ((t,_):_) -> Right t
+
+readTransactions :: String -> Domain [Transaction]
+readTransactions = mapM readTransaction . lines
+
+```
+The `readTransactions` function will, depending on its entry, either return a `Right` list of transactions, or a `Left` with the message corresponding to the first failure.
+
+What if the file can't be open? Using `Control.Exception` will help us to deal with such situation:
+```haskell
+getFileContent :: FilePath -> IO (Domain String)
+getFileContent fp = 
+    (readFile fp >>= return . Right) `catch` handle
+    where
+    handle :: IOException -> IO (Domain String)
+    handle e = return $ Left (show e) 
+```
+Our function returns a `IO (Domain String)` value, not a `Domain String` because there is no safe way to convert an IO value into a non-IO value. Since this function will be used in a the `main :: IO ()` context, it's not a problem. 
+
+Another IO function has to do with getting the first argument on the command line:
+```haskell
+getFileNameArg :: IO (Domain String)
+getFileNameArg = do
+    args <- getArgs
+    case null args of
+      True -> return $ Left "no file name given"
+      False -> return $ Right (args !! 0)
+```
+
+Our main program can now examine the values returned by `get`... functions and branch accordingly instead of halting:
+
+```haskell
+program2 :: IO ()
+program2 = do
+    fileName <- getFileNameArg 
+    case fileName of
+        Left msg -> putStrLn msg
+        Right fp -> do 
+            content <- getFileContent fp
+            case (content >>= readTransactions) of
+                Left msg -> putStrLn msg
+                Right txs -> putStrLn $ unlines $ map show $ summarize txs
+main :: IO ()
+main = program2
+```
+
+
 

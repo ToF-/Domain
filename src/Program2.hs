@@ -12,6 +12,8 @@ import Control.Exception  ( IOException
 
 type Message = String
 
+type Domain = Either Message
+
 data Transaction = Transaction { transactionCategory :: String
                                , transactionAmount   :: Double }
     deriving (Eq,Ord)
@@ -26,14 +28,14 @@ instance Read Transaction where
           _ -> []
 
 -- read a transaction or fail
-readTransaction :: String -> Either Message Transaction
+readTransaction :: String -> Domain Transaction
 readTransaction s = 
     case reads s of
       []        -> Left $ "incorrect csv format : " ++ s
       ((t,_):_) -> Right t
 
 -- read all transactions or fail
-readTransactions :: String -> Either Message [Transaction]
+readTransactions :: String -> Domain [Transaction]
 readTransactions = mapM readTransaction . lines
 
 data Summary = Summary { summaryCategory :: String
@@ -58,23 +60,30 @@ summarize = map summary
         category = transactionCategory . head
         total    = sum . map transactionAmount
     
--- turn an IOException into a failure
-handle :: IOException -> IO (Either Message String)
-handle e = return $ Left (show e) 
 
--- reads the given transaction file, outputs its summary
+getFileContent :: FilePath -> IO (Domain String)
+getFileContent fp = 
+    (readFile fp >>= return . Right) `catch` handle
+    where
+    handle :: IOException -> IO (Domain String)
+    handle e = return $ Left (show e) 
+
+getFileNameArg :: IO (Domain String)
+getFileNameArg = do
+    args <- getArgs
+    case null args of
+      True -> return $ Left "no file name given"
+      False -> return $ Right (args !! 0)
+
 program2 :: IO ()
 program2 = do
-    args    <- getArgs
-    if null args then putStrLn "no file name given"
-                 else do
-                     content <- (readFile (args !! 0) >>= return . Right) `catch` handle
-                     case content of
-                       Left msg -> putStrLn msg
-                       Right text -> do
-                            let transactions = readTransactions text
-                            case transactions of
-                                Left msg -> putStrLn msg
-                                Right txs -> putStrLn $ unlines $ map show $ summarize txs
+    fileName <- getFileNameArg 
+    case fileName of
+        Left msg -> putStrLn msg
+        Right fp -> do 
+            content <- getFileContent fp
+            case (content >>= readTransactions) of
+                Left msg -> putStrLn msg
+                Right txs -> putStrLn $ unlines $ map show $ summarize txs
 
 
