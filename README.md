@@ -135,9 +135,9 @@ Another IO function has to do with getting the first argument on the command lin
 getFileNameArg :: IO (Domain String)
 getFileNameArg = do
     args <- getArgs
-    case null args of
-      True -> return $ Left "no file name given"
-      False -> return $ Right (args !! 0)
+    return $ if null args 
+                    then Left "no file name given" 
+                    else Right (args !! 0)
 ```
 
 Our main program can now examine the values returned by `get`... functions and branch accordingly instead of halting:

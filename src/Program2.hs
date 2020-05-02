@@ -71,9 +71,9 @@ getFileContent fp =
 getFileNameArg :: IO (Domain String)
 getFileNameArg = do
     args <- getArgs
-    case null args of
-      True -> return $ Left "no file name given"
-      False -> return $ Right (args !! 0)
+    return $ if null args 
+                    then Left "no file name given" 
+                    else Right (args !! 0)
 
 program2 :: IO ()
 program2 = do
