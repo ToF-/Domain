@@ -9,7 +9,7 @@ import Data.Function      ( on )
 
 data Transaction = Transaction { transactionCategory :: String
                                , transactionAmount   :: Double }
-    deriving (Eq,Ord)
+    deriving (Eq,Ord,Show)
 
 instance Read Transaction where
     readsPrec _ s = 

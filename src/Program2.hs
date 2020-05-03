@@ -1,5 +1,5 @@
 
-module Program2           ( program2 )
+module Program2           -- ( program2 )
     where
 
 import System.Environment ( getArgs )
@@ -12,11 +12,9 @@ import Control.Exception  ( IOException
 
 type Message = String
 
-type Domain = Either Message
-
 data Transaction = Transaction { transactionCategory :: String
                                , transactionAmount   :: Double }
-    deriving (Eq,Ord)
+    deriving (Eq,Ord,Show)
 
 -- read transaction from a csv format line eg. "Books, 24.65"
 instance Read Transaction where
@@ -28,14 +26,14 @@ instance Read Transaction where
           _ -> []
 
 -- read a transaction or fail
-readTransaction :: String -> Domain Transaction
+readTransaction :: String -> Either Message Transaction
 readTransaction s = 
     case reads s of
       []        -> Left $ "Error: incorrect csv format : " ++ s
       ((t,_):_) -> Right t
 
 -- read all transactions or fail
-readTransactions :: String -> Domain [Transaction]
+readTransactions :: String -> Either Message [Transaction]
 readTransactions = mapM readTransaction . lines
 
 data Summary = Summary { summaryCategory :: String
@@ -61,19 +59,27 @@ summarize = map summary
         total    = sum . map transactionAmount
     
 
-getFileContent :: FilePath -> IO (Domain String)
+getFileContent :: FilePath -> IO (Either Message String)
 getFileContent fp = 
     (readFile fp >>= return . Right) `catch` handle
     where
-    handle :: IOException -> IO (Domain String)
+    handle :: IOException -> IO (Either Message String)
     handle e = return $ Left $ "Error: " ++ (show e) 
 
-getFileNameArg :: IO (Domain String)
+getFileNameArg :: IO (Either Message String)
 getFileNameArg = do
     args <- getArgs
     return $ if null args 
                     then Left "Error: no file name given" 
                     else Right (args !! 0)
+
+checkNotEmpty :: [Transaction] -> Either Message [Transaction]
+checkNotEmpty []  = Left "Error: no transactions"
+checkNotEmpty txs = Right txs
+
+checkNotEmptyCategory :: Transaction -> Either Message Transaction
+checkNotEmptyCategory (Transaction "" _) = Left "Error: empty category"
+checkNotEmptyCategory tx                 = Right tx
 
 program2 :: IO ()
 program2 = do
@@ -82,7 +88,8 @@ program2 = do
         Left msg -> putStrLn msg
         Right fp -> do 
             content <- getFileContent fp
-            case (content >>= readTransactions) of
+            case (content >>= readTransactions 
+                          >>= checkNotEmpty 
+                          >>= mapM checkNotEmptyCategory) of
                 Left msg -> putStrLn msg
-                Right []  -> putStrLn $ "Error: no transactions"
                 Right txs -> putStrLn $ unlines $ map show $ summarize txs

@@ -1,8 +1,8 @@
 module Main where
 
-import Program1
+import Program2
 
 type Domain = Either String
 
 main :: IO ()
-main = program1
+main = program2

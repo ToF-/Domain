@@ -24,7 +24,7 @@ Interest, 38.17
 Investment, 6007.0
 Savings, 500.0
 ```
-## First, a naive approach
+## 1. First, a naive approach
 
 Our program will 
 
@@ -47,7 +47,7 @@ Now let’s define adequate data types.
 ```haskell
 data Transaction = Transaction { transactionCategory :: String
                                , transactionAmount   :: Double }
-    deriving (Eq,Ord)
+    deriving (Eq,Ord,Show)
 
 data SummaryLine = SummaryLine { summaryCategory :: String
                                , summaryAmount   :: Double }
@@ -140,7 +140,7 @@ $ program1 data/empty.csv ⏎
 ```
 None of these conditions except the last one is adequately managed by our program, which means that given certain inputs, some of our functions will not return a value, and the program will halt. Let's change this.
 
-## Responding to failure conditions
+## 2. Responding to failure conditions
 
 The way to deal with failure is to use data types that can represent the failure (for example in the form of a String) as well as the normal values. The `Either` monad data type is just designed for such representations. To make things a bit clearer, let's define a type synonym for the `String` used as messages.
 ```haskell
@@ -148,7 +148,7 @@ type Message = String
 ```
 Our most frequent concern will be about the file data format, so let's create functions that will manage faulty csv data:
 ```haskell
-readTransaction :: String -> Domain Transaction
+readTransaction :: String -> Either Message Transaction
 readTransaction s = 
     case reads s of
       []        -> Left $ "Error: incorrect csv format : " ++ s
@@ -162,18 +162,18 @@ The `mapM :: (Traversable t, Monad m) => (a -> m b) -> t a -> m (t b)` function 
 
 What if the file can't be open? Using `Control.Exception` will help us to deal with such situation:
 ```haskell
-getFileContent :: FilePath -> IO (Domain String)
+getFileContent :: FilePath -> IO (Either Message String)
 getFileContent fp = 
     (readFile fp >>= return . Right) `catch` handle
     where
-    handle :: IOException -> IO (Domain String)
+    handle :: IOException -> IO (Either Message String)
     handle e = return $ Left $ "Error: " ++ (show e) 
 ```
-Note that our function returns a `IO (Either Message String)` value, not a `Either Message String`. There is no safe way to convert an IO value into a non-IO value. That should not be a problem, because the `getFileContent` function will solely used within the context of an IO action and nowhere else.
+Note that our function returns a `IO (Either Message String)` value, not a `Either Message String`. There is no safe way to convert an IO value into a non-IO value. That should not be a problem, because `getFileContent` will solely used within the context of an IO action and nowhere else.
 
 Another IO function has to do with getting the first argument on the command line:
 ```haskell
-getFileNameArg :: IO (Domain String)
+getFileNameArg :: IO (Either Message String)
 getFileNameArg = do
     args <- getArgs
     return $ if null args 
@@ -220,75 +220,88 @@ The construct:
 ```haskell
 content >>= readTransaction
 ```
-Seems to suggest a way that we could use to bind all the functions of type `a -> Either Message a` together. Indeed for example, these functions:
+Seems to suggest a way to chain actions on values of type `Either Message a` instead of explicitely branching on every failure case. For example we can refactor our program to use an Either action to detect empty transaction lists, or to detect that at least one transaction has an empty category:
 ```haskell
-checkNotEmpty :: String -> Either Message String
-checkNotEmpty "" = Left "empty parameter"
-checkNotEmpty s  = Right s
+checkNotEmpty :: [Transaction] -> Either Message [Transaction]
+checkNotEmpty []  = Left "Error: no transactions"
+checkNotEmpty txs = Right txs
 
-getDouble :: String -> Either Message Double
-getDouble s = case reads s of
-    []        -> Left "not a number"
-    ((d,_):_) -> Right d
+checkNotEmptyCategory :: Transaction -> Either Message Transaction
+checkNotEmptyCategory (Transaction "" _) = Left "Error: empty category"
+checkNotEmptyCategory tx                 = Right tx
 
-checkPositive :: Double -> Either Message Double
-checkPositive d 
-    | d < 0     = Left "negative number"
-    | otherwise = Right d
-```
-Could be used in combination, forming in a single function the equivalent of 3 `case ... of` branchings.
-```haskell
-getSquareRoot :: String -> Either Message Double
-getSquareRoot s = checkNotEmpty s 
-                >>= getDouble
-                >>= checkPositive
-                >>= return . sqrt
-
-main :: IO ()
-main = do
-    s <- getLine
-    case getSquareRoot s of
-        Left msg -> putStrLn $ "Error: " ++ s 
-        Right d  -> print d
-```
-
-Could it possible to chain all our domain functions, like this ?
-
-```haskell
-wrongProgram :: IO () -- won't compile
-wrongProgram = do
+program2 :: IO ()
+program2 = do
     fileName <- getFileNameArg 
-    content <- getFileContent fileName
-    result <- fmap summarize $ readTransactions content
-    case result of
-        Left msg   -> putStrLn msg
-        Right sums -> putStrLn $ unlines $ map show $ sums
+    case fileName of
+        Left msg -> putStrLn msg
+        Right fp -> do 
+            content <- getFileContent fp
+            case (content >>= readTransactions 
+                          >>= checkNotEmpty 
+                          >>= mapM checkNotEmptyCategory) of
+                Left msg -> putStrLn msg
+                Right txs -> putStrLn $ unlines $ map show $ summarize txs
 ```
 
-No, because `getFileNameArg` and `getFileContent` are `IO (Either Message a)` functions and not `Either Message a` function.
+Question: We still have explicit branching in our main function. Could it possible to chain _all_ our `Either Message a` functions, like this ?
 
-To understand this, we can rewrite this wrong program using `>>=` instead of left arrows:
 ```haskell
-wrongProgram :: IO () -- won't compile
-wrongProgram = do
-    result <- getFileNameArg >>= getFileContent >>= readTransactions >>= return . summarize
-    case result of
-        Left msg   -> putStrLn msg
-        Right sums -> putStrLn $ unlines $ map show $ sums
+wrong_program2 :: IO () -- won't compile
+wrong_program2 = do
+    case (getFileNameArg >>= getFileContent
+                         >>= readTransactions 
+                         >>= checkNotEmpty 
+                         >>= mapM checkNotEmptyCategory) of
+               Left msg -> putStrLn msg
+               Right txs -> putStrLn $ unlines $ map show $ summarize txs
 ```
-and then examine the type of the functions we are trying to bind:
-```
-:t (>>=) :: forall a b. m a -> (a -> m b) -> m b 
+Answer: No. _ghc_ has no less than 6 complaints about this piece of code. Here's an (excerpt of) the first one
 
-:t getFileNameArg :: IO (Either Message String)
-:t (getFileNameArg >>=) :: (Either Message String -> IO b) -> IO b
-:t getFileContent :: FilePath -> IO (Either Message String)
-
-:t (getFileContent >>=) :: (Either Message String -> IO b) -> IO b
-:t readTransactions :: String -> Either Message [Transaction]
-:t (readTransactions >>=) :: ([Transaction] -> Either Message b) -> Either Message b
-:t return summarize :: [Transactions] -> Either Message [SummaryLine]
 ```
+    • Couldn't match type ‘Either Message String’ with ‘[Char]’
+      Expected type: Either Message String -> IO (Either Message String)
+        Actual type: FilePath -> IO (Either Message String)
+86 |     case (getFileNameArg >>= getFileContent
+   |                              ^^^^^^^^^^^^^^
+
+```
+In essence: we cannot chain monadic actions from the IO monad to the Either monad, and vice versa. Since the `case` is examining a value of type `Either Message [Transaction]`, the expected type for actions leading to that value is `a -> Either Message b`. But we try to chain actions of type `a -> IO b`. That can't work.
+
+We can bind monadic actions to distinct types through the same monad m :
+```
+ghci ⏎
+> readFile "data/transactions.csv" >>= putStrLn ⏎
+Groceries, 100.00
+Investment, 4807.00
+Groceries, 42.00
+Savings, 500.00
+Interest, 38.17
+Groceries, 30.00
+Equipment, 179.00
+Investment, 1200.00
+
+readTransaction "Foo,4807" >>= checkNotEmptyCategory ⏎
+Right (Transaction {transactionCategory = "Foo", transactionAmount = 4807.0})
+
+readTransaction ",42" >>= checkNotEmptyCategory ⏎
+Left "Error: empty category"
+```
+but we cannot do that through different monadic types:
+```
+ghci ⏎
+> readFile "data/transactions.csv" >>= readTransactions ⏎
+<interactive>:3:38: error:
+    • Couldn't match type ‘Either Message’ with ‘IO’
+      Expected type: String -> IO [Transaction]
+        Actual type: String -> Either Message [Transaction]
+    • In the second argument of ‘(>>=)’, namely ‘readTransactions’
+      In the expression:
+        readFile "data/transactions.csv" >>= readTransactions
+      In an equation for ‘it’:
+          it = readFile "data/transactions.csv" >>= readTransactions
+```
+
 
 
 
