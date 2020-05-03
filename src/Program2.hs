@@ -31,7 +31,7 @@ instance Read Transaction where
 readTransaction :: String -> Domain Transaction
 readTransaction s = 
     case reads s of
-      []        -> Left $ "incorrect csv format : " ++ s
+      []        -> Left $ "Error: incorrect csv format : " ++ s
       ((t,_):_) -> Right t
 
 -- read all transactions or fail
@@ -66,20 +66,23 @@ getFileContent fp =
     (readFile fp >>= return . Right) `catch` handle
     where
     handle :: IOException -> IO (Domain String)
-    handle e = return $ Left (show e) 
+    handle e = return $ Left $ "Error: " ++ (show e) 
 
 getFileNameArg :: IO (Domain String)
 getFileNameArg = do
     args <- getArgs
     return $ if null args 
-                    then Left "no file name given" 
+                    then Left "Error: no file name given" 
                     else Right (args !! 0)
 
 program2 :: IO ()
 program2 = do
-    result <- getFileNameArg >>= getFileContent >>= readTransactions >>= return . summarize
-    case result of
-        Left msg   -> putStrLn msg
-        Right sums -> putStrLn $ unlines $ map show $ sums
-
-
+    fileName <- getFileNameArg 
+    case fileName of
+        Left msg -> putStrLn msg
+        Right fp -> do 
+            content <- getFileContent fp
+            case (content >>= readTransactions) of
+                Left msg -> putStrLn msg
+                Right []  -> putStrLn $ "Error: no transactions"
+                Right txs -> putStrLn $ unlines $ map show $ summarize txs
