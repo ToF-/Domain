@@ -1,12 +1,14 @@
-# domain
+# Scratching the surface
 
-playing with `ExceptT` 
+https://bartoszmilewski.com/2016/11/30/monads-and-effects/
 
+
+In this post I playing with the `ExceptT` monad transformer in order to make a simple program even simpler.
 ## A naive approach
 
-Let's say we want a program that reads a csv file containing _transactions_ of the form _(category, amount)_, and prints the summary per category of all these transactions.
+Let's say we want to write a program that reads a csv file containing _transactions_ of the form _(category, amount)_, and prints a summary by category of these transactions.
 
-Given a file `transactions.csv` containing this data:
+For instance, given a file `transactions.csv` containing this data:
 ```
 Groceries, 100.00
 Investment, 4807.00
@@ -18,7 +20,7 @@ Equipment, 179.33
 Investment, 1200.00
 ```
 
-Then the command `summary transactions.csv` will output this:
+the command `summary transactions.csv` will output this:
 ```
 Equipment, 179.33
 Groceries, 172.0
@@ -26,7 +28,17 @@ Interest, 38.0
 Investment, 6007.0
 Savings, 102.0
 ```
-After our program import list,
+## First, a naive approach
+
+Our program will 
+
+- obtain the name of a file from the command line,
+- read this file, splitting each line into _category_ and _amount_, so as to create _transactions_
+- sort and group these _transactions_ by _category_, 
+- sum these groups into _summary lines_
+- and finally print these lines
+
+Thus we’ll need to import the following functions:
 ```haskell
 import System.Environment ( getArgs )
 import Data.List.Split    ( splitOn )
@@ -34,8 +46,7 @@ import Data.List          ( groupBy
                           , sortBy  )
 import Data.Function      ( on )
 ```
-
-we define adequate data types.  We should be able to `read` a transaction from a `String` containing comma separated value:
+Now let’s define adequate data types.  We should be able to `read` a transaction from a `String` containing comma separated value:
 
 ```haskell
 data Transaction = Transaction { transactionCategory :: String
@@ -50,7 +61,7 @@ instance Read Transaction where
                      _ -> []
           _ -> []
 ```
-And we should be able to `show` a summary line as well:
+And we should be able to `show` a summary line:
 ```haskell
 data SummaryLine = SummaryLine { summaryCategory :: String
                                , summaryAmount   :: Double }
@@ -73,7 +84,19 @@ summarize = map summary
         where
         category = transactionCategory . head
         total    = sum . map transactionAmount
-```
+``` 
+Note how the `on` function elegantly helps us to write our logic, by composing the functions that are required by `sortBy` and `groupBy`:
+
+on :: (b -> b -> c) -> (a -> b) -> a -> a -> c
+
+on compare :: (Ord b) => (a -> b) -> a -> a -> Ordering
+
+on (==) :: (Eq b) => (a -> b) -> a -> a -> Bool
+
+on compare transactionCategory :: Transaction -> Transaction -> Ordering
+
+on (==) transactionCategory :: Transaction -> Transaction -> Bool
+
 The main function, given an file name on the command line, will read that file, convert its content into a list of `Transaction`s, compute and then print the summary.
 ```haskell
 program1 :: IO ()
@@ -94,7 +117,7 @@ What could go wrong?
 - the file could contain data that it would fail to recognize as comma separated transaction fields
 - the file could be empty, in which case nothing would be output
 
-None of these conditions is adequately managed by our program, which means that given certain input, some of our function will not return a value, and the program will halt. Let's change this.
+None of these conditions is adequately managed by our program, which means that given certain inputs, some of our function will not return a value, and the program will halt. Let's change this.
 
 ## Responding to failure conditions
 
