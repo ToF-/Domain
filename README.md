@@ -244,7 +244,7 @@ program2 = do
                 Right txs -> putStrLn $ unlines $ map show $ summarize txs
 ```
 
-Question: We still have explicit branching in our main function. Could it possible to chain _all_ our `Either Message a` functions, like this ?
+Question: We still have explicit branching in our main function. Could it be possible to chain _all_ our `Either Message a` functions, like this ?
 
 ```haskell
 wrong_program2 :: IO () -- won't compile
@@ -256,7 +256,7 @@ wrong_program2 = do
                Left msg -> putStrLn msg
                Right txs -> putStrLn $ unlines $ map show $ summarize txs
 ```
-Answer: No. _ghc_ has no less than 6 complaints about this piece of code. Here's an (excerpt of) the first one
+Answer: No. _ghc_ has no less than 6 complaints about this piece of code. Here's (an excerpt of) the first one:
 
 ```
     • Couldn't match type ‘Either Message String’ with ‘[Char]’
