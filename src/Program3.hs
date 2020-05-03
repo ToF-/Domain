@@ -8,12 +8,14 @@ import Data.List          ( groupBy
 import Data.Function      ( on )
 import Control.Exception  ( IOException
                           , catch )
-import Control.Monad.Except ( ExceptT (..)
-                            , liftIO
-                            , runExceptT
-                            , throwError 
-                            )
+import Control.Monad.Trans.Except ( ExceptT (..)
+                                  , runExceptT
+                                  , throwE
+                                  )
+
+import Control.Monad.IO.Class     ( liftIO )
 type Message = String
+
 
 type Domain = ExceptT Message IO
 
@@ -44,7 +46,7 @@ instance Read Transaction where
 readTransaction :: String -> Domain Transaction
 readTransaction s = 
     case reads s of
-      []        -> throwError ("incorrect csv format : " ++ s)
+      []        -> throwE ("incorrect csv format : " ++ s)
       ((t,_):_) -> domain t
 
 readTransactions :: String -> Domain [Transaction]
@@ -72,7 +74,7 @@ summarize = map summary
         total    = sum . map transactionAmount
     
 firstArg :: [String] -> Domain FilePath
-firstArg []     = throwError "no file name given"
+firstArg []     = throwE "no file name given"
 firstArg (fp:_) = domain fp
 
 getTransactions :: Domain [Transaction]

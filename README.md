@@ -266,7 +266,7 @@ Answer: No. _ghc_ has no less than 6 complaints about this piece of code. Here's
    |                              ^^^^^^^^^^^^^^
 
 ```
-In essence: we cannot chain monadic actions from the IO monad to the Either monad, and vice versa. Since the `case` is examining a value of type `Either Message [Transaction]`, the expected type for actions leading to that value is `a -> Either Message b`. But we try to chain actions of type `a -> IO b`. That can't work.
+In essence: we cannot chain monadic actions from the IO monad to the Either monad, and vice versa. Since the `case` is examining a value of type `Either Message [Transaction]`, the expected type for actions leading to that value is `a -> Either Message b`, but we are trying to get to that value through actions of type `a -> IO b`. That can't work.
 
 We can bind monadic actions to distinct types through the same monad m :
 ```
@@ -301,7 +301,7 @@ ghci ⏎
       In an equation for ‘it’:
           it = readFile "data/transactions.csv" >>= readTransactions
 ```
-
+## 3. 
 
 
 

@@ -6,3 +6,4 @@ type Domain = Either String
 
 main :: IO ()
 main = program2
+
