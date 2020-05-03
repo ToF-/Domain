@@ -1,4 +1,4 @@
-module Program3           ( program3 )
+module Program3           
     where
 
 import System.Environment ( getArgs )
@@ -6,29 +6,15 @@ import Data.List.Split    ( splitOn )
 import Data.List          ( groupBy
                           , sortBy  )
 import Data.Function      ( on )
-import Control.Exception  ( IOException
-                          , catch )
+import Control.Exception  ()
 import Control.Monad.Trans.Except ( ExceptT (..)
                                   , runExceptT
                                   , throwE
                                   )
 
 import Control.Monad.IO.Class     ( liftIO )
+
 type Message = String
-
-
-type Domain = ExceptT Message IO
-
-domain :: a -> Domain a
-domain = ExceptT . pure . Right
-
-getIO :: IO a -> Domain a
-getIO action = ExceptT $ fmap Right action `catch` handle
-    where
-    handle 
-        :: IOException 
-        -> IO (Either Message a)
-    handle = return . Left . show
 
 data Transaction = 
     Transaction { transactionCategory :: String
@@ -43,13 +29,13 @@ instance Read Transaction where
                      _ -> []
           _ -> []
 
-readTransaction :: String -> Domain Transaction
+readTransaction :: String -> ExceptT Message IO Transaction
 readTransaction s = 
     case reads s of
       []        -> throwE ("incorrect csv format : " ++ s)
-      ((t,_):_) -> domain t
+      ((t,_):_) -> return t
 
-readTransactions :: String -> Domain [Transaction]
+readTransactions :: String -> ExceptT Message IO [Transaction]
 readTransactions = mapM readTransaction . lines
 
 data Summary = 
@@ -73,15 +59,15 @@ summarize = map summary
         category = transactionCategory . head
         total    = sum . map transactionAmount
     
-firstArg :: [String] -> Domain FilePath
+firstArg :: [String] -> ExceptT Message IO FilePath
 firstArg []     = throwE "no file name given"
-firstArg (fp:_) = domain fp
+firstArg (fp:_) = return fp
 
-getTransactions :: Domain [Transaction]
+getTransactions :: ExceptT Message IO [Transaction]
 getTransactions = do
     args         <- liftIO getArgs
     filePath     <- firstArg args
-    content      <- getIO $ readFile filePath
+    content      <- liftIO $ readFile filePath
     transactions <- readTransactions content
     return transactions
     
@@ -93,6 +79,5 @@ report (Right sums) = unlines $ map show sums
 program3 :: IO ()
 program3 = do 
     transactions <- runExceptT getTransactions
-    let result = summarize <$> transactions
-    putStrLn $ report result
+    putStrLn $ report (summarize <$> transactions)
 

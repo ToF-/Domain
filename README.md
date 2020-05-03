@@ -301,8 +301,28 @@ ghci ⏎
       In an equation for ‘it’:
           it = readFile "data/transactions.csv" >>= readTransactions
 ```
-## 3. 
+## 3. Using a monad transformer
 
+What we need is a way to chain Either actions _inside_ the IO monad. This is exactly what the `Control.Monad.Trans.Except` library is offering us:
+
+___Control.Monad.Trans.Except___
+
+_This monad transformer extends a monad with the ability to throw exceptions._
+
+_A sequence of actions terminates normally, producing a value, only if none of the actions in the sequence throws an exception. If one throws an exception, the rest of the sequence is skipped and the composite action exits with that exception._
+
+```haskell
+newtype ExceptT e m a
+```
+_A monad transformer that adds exceptions to other monads._
+
+`ExceptT` _constructs a monad parameterized over two things:_
+
+- _e_ - _The exception type._
+- _m_ - _The inner monad._
+
+
+_The `return` function yields a computation that produces the given value, while `>>=` sequences` two subcomputations, exiting on the first exception._
 
 
 
