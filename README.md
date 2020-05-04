@@ -189,12 +189,12 @@ program2 = do
     fileName <- getFileNameArg 
     case fileName of
         Left msg -> putStrLn msg
-        Right fp -> do 
-            content <- getFileContent fp
-            case (content >>= readTransactions) of
-                Left msg -> putStrLn msg
-                Right []  -> putStrLn $ "Error: no transactions"
-                Right txs -> putStrLn $ unlines $ map show $ summarize txs
+        right fp -> do 
+            content <- getfilecontent fp
+            case (content >>= readtransactions) of
+                left msg -> putstrln msg
+                right []  -> putstrln $ "error: no transactions"
+                right txs -> putstrln $ unlines $ map show $ summarize txs
 main :: IO ()
 main = program2
 ```
@@ -216,12 +216,18 @@ Investment, 6007.0
 Savings, 500.0
 ```
 ## 3. Monadic actions as isolated contexts
-The construct:
+The use of the bind operator in the middle of the function:
 ```haskell
-content >>= readTransaction
+            ...
+            content <- getfilecontent fp
+            case (content >>= readtransactions) of
+                left msg -> putstrln msg
+                right []  -> putstrln $ "error: no transactions"
+                right txs -> putstrln $ unlines $ map show $ summarize txs
 ```
-Seems to suggest a way to chain actions on values of type `Either Message a` instead of explicitely branching on every failure case. For example we can refactor our program to use an Either action to detect empty transaction lists, or to detect that at least one transaction has an empty category:
+suggests that we can chain any action of the type `a -> Either Message b` to the value of `content`. For example, we could add new controls to detect an empty transaction list, or to check that no transaction in the list has an empty category:
 ```haskell
+
 checkNotEmpty :: [Transaction] -> Either Message [Transaction]
 checkNotEmpty []  = Left "Error: no transactions"
 checkNotEmpty txs = Right txs
@@ -243,8 +249,9 @@ program2 = do
                 Left msg -> putStrLn msg
                 Right txs -> putStrLn $ unlines $ map show $ summarize txs
 ```
+This chaining of controls could give the impression that we've missed an opportunity to simplify the code by equally chaining the values obtained by `getFileNameArg` and `getFileContent`. Instead we used explicit `case ... of` branching.
 
-Question: We still have explicit branching in our main function. Could it be possible to chain _all_ our `Either Message a` functions, like this ?
+Could it be possible to chain _all_ our `Either Message a` functions, like this ?
 
 ```haskell
 wrong_program2 :: IO () -- won't compile
@@ -266,20 +273,15 @@ Answer: No. _ghc_ has no less than 6 complaints about this piece of code. Here's
    |                              ^^^^^^^^^^^^^^
 
 ```
-In essence: we cannot chain monadic actions from the IO monad to the Either monad, and vice versa. Since the `case` is examining a value of type `Either Message [Transaction]`, the expected type for actions leading to that value is `a -> Either Message b`, but we are trying to get to that value through actions of type `a -> IO b`. That can't work.
+In essence: we cannot chain monadic actions from the IO monad to the Either monad, and vice versa. Since the `case ... of` is examining a value of type `Either Message [Transaction]`, the expected type for actions leading to that value is `a -> Either Message b`, but we are trying to somehow get to that value through actions of type `a -> IO b`. That can't work.
 
-We can bind monadic actions to distinct types through the same monad m :
+We can __always__ bind monadic actions to distinct types through the __same monad__ m :
 ```
 ghci ⏎
 > readFile "data/transactions.csv" >>= putStrLn ⏎
 Groceries, 100.00
 Investment, 4807.00
-Groceries, 42.00
-Savings, 500.00
-Interest, 38.17
-Groceries, 30.00
-Equipment, 179.00
-Investment, 1200.00
+. . .
 
 readTransaction "Foo,4807" >>= checkNotEmptyCategory ⏎
 Right (Transaction {transactionCategory = "Foo", transactionAmount = 4807.0})
@@ -287,7 +289,7 @@ Right (Transaction {transactionCategory = "Foo", transactionAmount = 4807.0})
 readTransaction ",42" >>= checkNotEmptyCategory ⏎
 Left "Error: empty category"
 ```
-but we cannot do that through different monadic types:
+but we can __never__ do that through different monadic types:
 ```
 ghci ⏎
 > readFile "data/transactions.csv" >>= readTransactions ⏎
@@ -301,46 +303,59 @@ ghci ⏎
       In an equation for ‘it’:
           it = readFile "data/transactions.csv" >>= readTransactions
 ```
+
+Of course, it would be nice if we could...
+
 ## 4. Combining Monads with Monad Transformers
 
-What we need is a way to chain __Either__ actions _inside_ the IO monad. This is exactly what the `Control.Monad.Trans.Except` library is offering us:
+What we need in order to simplify the code is the ability to chain `Either` actions _inside_ the `IO` monad. 
 
-___Control.Monad.Trans.Except___
+This is exactly what the [`Control.Monad.Trans.Except`](https://hackage.haskell.org/package/transformers-0.5.6.2/docs/Control-Monad-Trans-Except.html) library is offering us:
 
-_This monad transformer extends a monad with the ability to throw exceptions._
+> __Control.Monad.Trans.Except__
+> 
+> This monad transformer extends a monad with the ability to throw exceptions.
+> 
+> A sequence of actions terminates normally, producing a value, only if none of the actions in the sequence throws an exception. If one throws an exception, the rest of the sequence is skipped and the composite action exits with that exception.
+> 
+> ```haskell
+> newtype ExceptT e m a
+> ```
+> A monad transformer that adds exceptions to other monads.
+> 
+> `ExceptT` constructs a monad parameterized over two things:
+> 
+> - _e_ - The exception type.
+> - _m_ - The inner monad.
+> 
+> The `return` function yields a computation that produces the given value, while `>>=` sequences two subcomputations, exiting on the first exception.
 
-_A sequence of actions terminates normally, producing a value, only if none of the actions in the sequence throws an exception. If one throws an exception, the rest of the sequence is skipped and the composite action exits with that exception._
-
-```haskell
-newtype ExceptT e m a
-```
-_A monad transformer that adds exceptions to other monads._
-
-`ExceptT` _constructs a monad parameterized over two things:_
-
-- _e_ - _The exception type._
-- _m_ - _The inner monad._
-
-
-_The `return` function yields a computation that produces the given value, while `>>=` sequences` two subcomputations, exiting on the first exception._
-
-Let's experiment on _ghci_. First let's import the module, and define a clear type synonym for the type of exceptions.
+Let's experiment on _ghci_. We start with importing the module, and defining a type synonym for exceptions that will make the signatures clearer.
 
 ```
 >  import Control.Monad.Trans.Except
 >  type Message = String
-type Message = String
+type Message = String ⏎
 ```
 Now we can create some `ExceptT` values:
 ```
 >  foo = return "foo" :: ExceptT Message IO String
 foo :: ExceptT Message IO String
->  fortytwo = return "42" :: ExceptT Message IO String
-fortytwo :: ExceptT Message IO String
 >  minusone = return "-1" :: ExceptT Message IO String
 minusone :: ExceptT Message IO String
+>  fortytwo = return "42" :: ExceptT Message IO String
+fortytwo :: ExceptT Message IO String
 ```
-Now let's create a monadic action on `ExceptT`, one will convert a string into a number, or fail doing so.
+
+If we want to extract and print the `Either` value underlying the transformed monad, we can use `runExceptT :: ExceptT e m a -> m (Either e a)`. This function does the inverse `ExceptT`.
+```
+>  runExceptT foo
+Right "foo"
+it :: Either Message String
+```
+We can also create a monadic actions of type `a -> ExceptT`. 
+
+This one will convert a string into a number, or fail doing so:
 ```
 > readE s = case reads s of [] -> throwE "not a number" ; ((n,_):_) -> return n
 readE :: (Read a, Monad m) => String -> ExceptT [Char] m a
@@ -350,14 +365,8 @@ Let's also create an action to check for positive numbers:
 >  checkP n | n < 0 = throwE "negative number" ; checkP n | otherwise = return n
 checkP :: (Ord a, Num a, Monad m) => a -> ExceptT [Char] m a
 ```
-The `runExceptT` function does the inverse `ExceptT`: it extracts the `Either` value from an `ExceptT`.
-```
->  runExceptT foo
-Right "foo"
-it :: Either Message String
-```
-Now let's write a little computation, one that will 
-- read a `String` into a `Double` value, or fail
+And now let's write a little computation, one that will 
+- convert a `String` into a `Double` value, or fail
 - check that this value is positive, or fail
 - apply the `sqrt` to that value
 ```
