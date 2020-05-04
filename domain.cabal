@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: cf3d0a4234649bdcd6a222d47f632eb9032905dd6cf0d412013dbf920cba7e49
+-- hash: b8f27eed9c6e9fc324dfa355ee89218fdb70a958efe6809e05ee3b12004e9895
 
 name:           domain
 version:        0.1.0.0
@@ -51,6 +51,7 @@ executable domain
   build-depends:
       base >=4.7 && <5
     , domain
+    , transformers
   default-language: Haskell2010
 
 test-suite domain-test
@@ -65,4 +66,5 @@ test-suite domain-test
       base >=4.7 && <5
     , domain
     , hspec
+    , transformers
   default-language: Haskell2010

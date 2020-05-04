@@ -6,15 +6,18 @@ import Data.List.Split    ( splitOn )
 import Data.List          ( groupBy
                           , sortBy  )
 import Data.Function      ( on )
-import Control.Exception  ()
+import Control.Exception  ( IOException
+                          , catch )
 import Control.Monad.Trans.Except ( ExceptT (..)
                                   , runExceptT
                                   , throwE
                                   )
 
-import Control.Monad.IO.Class     ( liftIO )
+import Control.Monad.Trans.Class     ( lift )
 
 type Message = String
+
+type Domain = ExceptT Message IO
 
 data Transaction = 
     Transaction { transactionCategory :: String
@@ -29,13 +32,13 @@ instance Read Transaction where
                      _ -> []
           _ -> []
 
-readTransaction :: String -> ExceptT Message IO Transaction
+readTransaction :: String -> Domain Transaction
 readTransaction s = 
     case reads s of
       []        -> throwE ("incorrect csv format : " ++ s)
       ((t,_):_) -> return t
 
-readTransactions :: String -> ExceptT Message IO [Transaction]
+readTransactions :: String -> Domain [Transaction]
 readTransactions = mapM readTransaction . lines
 
 data Summary = 
@@ -59,25 +62,45 @@ summarize = map summary
         category = transactionCategory . head
         total    = sum . map transactionAmount
     
-firstArg :: [String] -> ExceptT Message IO FilePath
-firstArg []     = throwE "no file name given"
-firstArg (fp:_) = return fp
-
-getTransactions :: ExceptT Message IO [Transaction]
-getTransactions = do
-    args         <- liftIO getArgs
-    filePath     <- firstArg args
-    content      <- liftIO $ readFile filePath
-    transactions <- readTransactions content
-    return transactions
-    
 report :: Either Message [Summary] -> String
 report (Left msg)   = "Error: " ++ msg
 report (Right [])   = "No transactions to summarize" 
 report (Right sums) = unlines $ map show sums
 
+catchE :: IO a -> Domain a
+catchE action = ExceptT (action `catchIO` handle)
+    where
+    catchIO :: IO a -> (IOException -> IO (Either Message a)) -> IO (Either Message a)
+    a `catchIO` h = (Right <$> a) `catch` h
+
+    handle :: IOException -> IO (Either Message a)
+    handle = return . Left . show
+
+getFileContent :: FilePath -> Domain String
+getFileContent fp = catchE $ readFile fp
+
+getFileNameArg :: Domain FilePath
+getFileNameArg = do
+    args <- lift getArgs
+    if null args then throwE "Error: no file name given" 
+                 else return (args !! 0)
+
+checkNotEmpty :: [Transaction] -> Domain [Transaction]
+checkNotEmpty []  = throwE "Error: no transactions"
+checkNotEmpty txs = return txs
+
+checkNotEmptyCategory :: Transaction -> Domain Transaction
+checkNotEmptyCategory (Transaction "" _) = throwE "Error: empty category"
+checkNotEmptyCategory tx                 = return tx
+
+computation :: Domain ()
+computation = do 
+    filePath     <- getFileNameArg 
+    content      <- getFileContent filePath
+    transactions <- readTransactions content
+    let summary = summarize transactions
+    lift $ print summary
+    -- lift $ putStrLn $ report summary
 program3 :: IO ()
-program3 = do 
-    transactions <- runExceptT getTransactions
-    putStrLn $ report (summarize <$> transactions)
+program3 = runExceptT computation >> return ()
 

@@ -24,7 +24,7 @@ Interest, 38.17
 Investment, 6007.0
 Savings, 500.0
 ```
-## 1. First, a naive approach
+## 1. A naive approach
 
 Our program will 
 
@@ -215,7 +215,7 @@ Interest, 38.17
 Investment, 6007.0
 Savings, 500.0
 ```
-## Monadic actions as isolated contexts
+## 3. Monadic actions as isolated contexts
 The construct:
 ```haskell
 content >>= readTransaction
@@ -301,9 +301,9 @@ ghci ⏎
       In an equation for ‘it’:
           it = readFile "data/transactions.csv" >>= readTransactions
 ```
-## 3. Using a monad transformer
+## 4. Combining Monads with Monad Transformers
 
-What we need is a way to chain Either actions _inside_ the IO monad. This is exactly what the `Control.Monad.Trans.Except` library is offering us:
+What we need is a way to chain __Either__ actions _inside_ the IO monad. This is exactly what the `Control.Monad.Trans.Except` library is offering us:
 
 ___Control.Monad.Trans.Except___
 
@@ -324,8 +324,102 @@ _A monad transformer that adds exceptions to other monads._
 
 _The `return` function yields a computation that produces the given value, while `>>=` sequences` two subcomputations, exiting on the first exception._
 
+Let's experiment on _ghci_. First let's import the module, and define a clear type synonym for the type of exceptions.
+
+```
+>  import Control.Monad.Trans.Except
+>  type Message = String
+type Message = String
+```
+Now we can create some `ExceptT` values:
+```
+>  foo = return "foo" :: ExceptT Message IO String
+foo :: ExceptT Message IO String
+>  fortytwo = return "42" :: ExceptT Message IO String
+fortytwo :: ExceptT Message IO String
+>  minusone = return "-1" :: ExceptT Message IO String
+minusone :: ExceptT Message IO String
+```
+Now let's create a monadic action on `ExceptT`, one will convert a string into a number, or fail doing so.
+```
+> readE s = case reads s of [] -> throwE "not a number" ; ((n,_):_) -> return n
+readE :: (Read a, Monad m) => String -> ExceptT [Char] m a
+```
+Let's also create an action to check for positive numbers:
+```
+>  checkP n | n < 0 = throwE "negative number" ; checkP n | otherwise = return n
+checkP :: (Ord a, Num a, Monad m) => a -> ExceptT [Char] m a
+```
+The `runExceptT` function does the inverse `ExceptT`: it extracts the `Either` value from an `ExceptT`.
+```
+>  runExceptT foo
+Right "foo"
+it :: Either Message String
+```
+Now let's write a little computation, one that will 
+- read a `String` into a `Double` value, or fail
+- check that this value is positive, or fail
+- apply the `sqrt` to that value
+```
+> computation v = sqrt <$> (v >>= readE >>= checkP)
+computation ::
+  (Floating b, Monad m, Read b, Ord b) =>
+  ExceptT [Char] m String -> ExceptT [Char] m b
+```
+Since we are applying a function to monadic value, we need to use `<$>` (`fmap` would work as well). Now we can use our computation on our different values:
+```
+>  runExceptT $ computation foo ⏎
+Left "not a number"
+it :: Either [Char] Double
+>  runExceptT $ computation minusone ⏎
+Left "negative number"
+it :: Either [Char] Double
+>  runExceptT $ computation fortytwo ⏎
+Right 6.48074069840786
+it :: Either [Char] Double
+```
+And see that it works as well as if we were using the Either Monad itself.
+
+But what about the IO part of this monad transformation? Can we define an `ExceptT` value that would be obtained via the input stream for example ?
+```
+getLineE = return getLine :: ExceptT Message IO String ⏎
+ error:
+    • Couldn't match type ‘IO String’ with ‘[Char]’
+      Expected type: ExceptT String IO String
+        Actual type: ExceptT String IO (IO String)
+```
+We cannot do that: `getLine :: IO String` and `return :: (Monad m) => a -> m a`, so `return getLine :: (Monad m) => m (IO String)`, which gives an `IO` monadic value inside a new monad, when what we need is a value inside a transformed `IO` monad.
+
+The function `lift :: (MonadTrans t, Monad m) => m a -> t m a` wich "lifts" a computation from the argument monad to the constructed monad has to come to our rescue:
+```
+> import Control.Monad.Trans.Class ⏎
+getLineE = lift getLine ⏎
+getLineE :: MonadTrans t => t IO String
+```
+Now we can try our computation on values obtained through interactions with IO instead of pure values:
+```
+> runExceptT $ computation getLineE ⏎
 
 
+```
+Of course, the evaluation is waiting for our input on the keyboard. Nothing will happen until we enter some characters.
+```
+bar ⏎
+Left "not a number"
+it :: Either [Char] Double
+>  runExceptT $ computation getLineE ⏎
+-42 ⏎
+Left "negative number"
+it :: Either [Char] Double
+>  runExceptT $ computation getLineE ⏎
+100 ⏎
+Right 10.0
+it :: Either [Char] Double
+> 
+```
+And this is how Monad Transformers can help us seamlessly compose together monadic actions inside an IO monad that would also behave like an execption monad.
 
+## 5. A new program
 
+We can now adjust our little transaction summary program.
 
