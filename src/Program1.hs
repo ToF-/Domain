@@ -5,6 +5,7 @@ import System.Environment ( getArgs )
 import Data.List          ( groupBy
                           , sortBy  )
 import Data.Function      ( on )
+import Data.Char          ( isAlphaNum )
 
 data Category = Category String
     deriving (Eq,Ord,Show)
@@ -14,9 +15,13 @@ data Transaction = Transaction { transactionCategory :: Category
     deriving (Eq,Ord)
 
 instance Read Category where
-    readsPrec _ s = if length c > 0 then [(Category c, r)] else []
-        where c = takeWhile (`elem` (['A'..'Z']++['a'..'z']++['0'..'9']++[' '])) s 
-              r = drop (length c) s
+    readsPrec _ s = if length label > 0 
+                       then return (Category label, rest) 
+                       else []
+        where 
+        label = takeWhile (isLegal) s
+        rest  = drop (length label) s
+        isLegal c = isAlphaNum c || c == ' '
 
 instance Read Transaction where
     readsPrec _ line = do

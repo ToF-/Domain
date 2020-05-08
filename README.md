@@ -7,9 +7,8 @@ Let's say we want to write a program that reads a csv file containing _transacti
 For instance, given a file `transactions.csv` containing this data:
 ```
 Groceries, 100.00
-Investment, 4807.00
-Groceries, 42.00
 Savings, 500.00
+Groceries, 42.00
 Interest, 38.17
 Groceries, 30.00
 Equipment, 179.00
@@ -21,10 +20,9 @@ the command `summary transactions.csv` will output this:
 Equipment, 179.0
 Groceries, 172.0
 Interest, 38.17
-Investment, 6007.0
 Savings, 500.0
 ```
-## 1. A naive approach
+## Program #1: A naive approach
 
 Our program will 
 
@@ -37,34 +35,43 @@ Our program will
 Thus we’ll need to import the following functions:
 ```haskell
 import System.Environment ( getArgs )
-import Data.List.Split    ( splitOn )
 import Data.List          ( groupBy
                           , sortBy  )
 import Data.Function      ( on )
 ```
-Let’s define adequate data types.  
+Let’s define adequate data types for our program. A _Category_ can be created by simply using a `String` as the label.
 
 ```haskell
-data Transaction = Transaction { transactionCategory :: String
-                               , transactionAmount   :: Double }
-    deriving (Eq,Ord,Show)
 
-data SummaryLine = SummaryLine { summaryCategory :: String
-                               , summaryAmount   :: Double }
+data Category = Category { categoryLabel :: String }
+    deriving (Eq, Show)
 ```
-Since we should be able to convert a Transaction from a `String` containing comma separated value, we can create a rudimentary parser for such values, by making `Transaction` an instance of the `Read` class.
-let's make this type an instance of `Read` and write a parser for it:
+We need a way to `read` a `Category` from a `String`, so let's make this type an instance of the `Read` class. Parsing a category label amounts to reading alphanumeric chars, possibly spaces, e.g `"Credit Cards Payments"`.
 
 ```haskell
-instance Read Transaction where
-    readsPrec _ s = 
-        case splitOn "," s of
-          [c,a] -> case reads a of
-                     ((d,_):_) -> [(Transaction c d,"")]
-                     _ -> []
-          _ -> []
+instance Read Category where
+    readsPrec _ s = if length label > 0 
+                       then return (Category label, rest) 
+                       else []
+        where 
+        label = takeWhile (isLegal) s
+        rest  = drop (length label) s
+        isLegal c = isAlphaNum c || c == ' '
 ```
-
+The `readsPrec` is the function that is called by `read` and `reads`. It has signature ` :: Int -> String -> [(a,String)]` where the first argument is the precedence level (which we don't care about it) the second is the string to be parsed, and the result is a list of possible values. An empty list means that the string cannot be parsed to a value of the given type. Let's try to `read` a `Category` with _ghci_:
+```
+> read "Foo" :: Category ⏎
+Category "Foo"
+it :: Category
+> read "*$!" :: Category ⏎
+*** Exception: Prelude.read: no parse
+(reads :: ReadS Category) "Bar, 42" ⏎
+[(Category "Bar",",42")]
+it :: [(Category, String)]
+```
+A _Transaction_ it the product of a _Category_ and a `Double` floating amount. 
+QQQQ
+QQQQ
 And we also should be able to `show` a Summary Line:
 ```haskell
 instance Show SummaryLine where
