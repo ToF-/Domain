@@ -1,32 +1,47 @@
-module Program1           ( program1 )
+module Program1
     where
 
 import System.Environment ( getArgs )
-import Data.List.Split    ( splitOn )
 import Data.List          ( groupBy
                           , sortBy  )
 import Data.Function      ( on )
 
-data Transaction = Transaction { transactionCategory :: String
-                               , transactionAmount   :: Double }
+data Category = Category String
     deriving (Eq,Ord,Show)
 
-instance Read Transaction where
-    readsPrec _ s = 
-        case splitOn "," s of
-          [c,a] -> case reads a of
-                     ((d,_):_) -> [(Transaction c d,"")]
-                     _ -> []
-          _ -> []
+data Transaction = Transaction { transactionCategory :: Category
+                               , transactionAmount   :: Double }
+    deriving (Eq,Ord)
 
-data SummaryLine = SummaryLine { summaryCategory :: String
+instance Read Category where
+    readsPrec _ s = if length c > 0 then [(Category c, r)] else []
+        where c = takeWhile (`elem` (['A'..'Z']++['a'..'z']++['0'..'9']++[' '])) s 
+              r = drop (length c) s
+
+instance Read Transaction where
+    readsPrec _ line = do
+        (categ,r1)  <- reads line
+        (_,r2)      <- readComma r1
+        (number,r3) <- (reads :: ReadS Double) r2
+        let t = Transaction categ number
+        return (t,r3)
+            where
+            readComma :: ReadS String
+            readComma s = case lex s of
+                            ((",",r):_) -> return (",",r)
+                            _ -> fail ("no parse with" ++ s)
+instance Show Transaction where
+    show (Transaction (Category c) d) = 
+        c ++ " " ++ show d
+
+data SummaryLine = SummaryLine { summaryCategory :: Category
                                , summaryAmount   :: Double }
 
 instance Show SummaryLine where
-    show t = 
-        (summaryCategory t) 
+    show (sl) = 
+        show (summaryCategory sl) 
         ++ ", " 
-        ++ show (summaryAmount t)
+        ++ show (summaryAmount sl)
 
 summarize :: [Transaction] -> [SummaryLine] 
 summarize = map summary 

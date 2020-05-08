@@ -42,7 +42,7 @@ import Data.List          ( groupBy
                           , sortBy  )
 import Data.Function      ( on )
 ```
-Now let’s define adequate data types.  
+Let’s define adequate data types.  
 
 ```haskell
 data Transaction = Transaction { transactionCategory :: String
@@ -52,7 +52,8 @@ data Transaction = Transaction { transactionCategory :: String
 data SummaryLine = SummaryLine { summaryCategory :: String
                                , summaryAmount   :: Double }
 ```
-Since we should be able to `read` a Transaction from a `String` containing comma separated value, let's make this type an instance of `Read` and write a simplistic parser for it:
+Since we should be able to convert a Transaction from a `String` containing comma separated value, we can create a rudimentary parser for such values, by making `Transaction` an instance of the `Read` class.
+let's make this type an instance of `Read` and write a parser for it:
 
 ```haskell
 instance Read Transaction where
@@ -63,6 +64,7 @@ instance Read Transaction where
                      _ -> []
           _ -> []
 ```
+
 And we also should be able to `show` a Summary Line:
 ```haskell
 instance Show SummaryLine where
