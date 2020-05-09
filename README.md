@@ -8,21 +8,21 @@ For instance, given a file `transactions.csv` containing this data:
 ```
 Groceries, 100.00
 Savings, 500.00
+Equipment, 32.00
 Groceries, 42.00
 Interest, 38.17
 Groceries, 30.00
 Equipment, 179.00
-Investment, 1200.00
 ```
 
 the command `summary transactions.csv` will output this:
 ```
-Equipment, 179.0
+Equipment, 211.0
 Groceries, 172.0
 Interest, 38.17
 Savings, 500.0
 ```
-## Program #1: A naive approach
+## Program #1: A naive solution
 
 Our program will 
 
@@ -63,37 +63,66 @@ The `readsPrec` is the function that is called by `read` and `reads`. It has sig
 > read "Foo" :: Category ⏎
 Category "Foo"
 it :: Category
+
 > read "*$!" :: Category ⏎
 *** Exception: Prelude.read: no parse
+
 (reads :: ReadS Category) "Bar, 42" ⏎
 [(Category "Bar",",42")]
 it :: [(Category, String)]
 ```
-A _Transaction_ it the product of a _Category_ and a `Double` floating amount. 
-QQQQ
-QQQQ
-And we also should be able to `show` a Summary Line:
+_Transaction_ it the product of a _Category_ and a `Double` floating amount. We can `read` transactions, so we need to implement `readsPrec` for this type as well.
 ```haskell
-instance Show SummaryLine where
-    show t = 
-        (summaryCategory t) 
-        ++ ", " 
-        ++ show (summaryAmount t)
+data Transaction = Transaction { transactionCategory :: Category
+                               , transactionAmount   :: Double }
+    deriving (Eq,Ord,Show)
+
+instance Read Transaction where
+    readsPrec _ line = do
+        (categ,  rest1) <- reads line
+        (_,      rest2) <- readComma rest1
+        (number, rest3) <- reads rest2
+        return $ (Transaction categ number, rest3)
+            where
+            readComma :: ReadS String
+            readComma s = case lex s of
+                            ((",",r):_) -> return (",",r)
+                            _           -> []
 ```
+Since `readsPrec` is chaining computations on the list monad -- it reads a `Category`, then a comma (and discards it), then a `Double` value -- it will result in an empty list as soon as one of the three parsers fails.
+
+```
+> read "Foo, 42" :: Transaction ⏎
+Transaction {transactionCategory = Category "Foo", transactionAmount = 42.0}
+it :: Transaction
+
+> read ", 42" :: Transaction ⏎
+*** Exception: Prelude.read: no parse
+
+> read "Bar, i42" :: Transaction ⏎
+*** Exception: Prelude.read: no parse
+>
+```
+A _Summary Line_ has the exact same structure as a `Transaction`. We define it as a type synonym to gain clarity in signatures. T
+And we also should be able to `show` a Summary Line:
+
 To summarize the Transactions by category, we sort them by category, group them by category, and for each group, create a Summary Line with the category and total amount of the group:
 ```haskell
+type SummaryLine = Transaction
+
 summarize :: [Transaction] -> [SummaryLine] 
 summarize = map summary 
           . groupBy ( (==)    `on` transactionCategory ) 
           . sortBy  ( compare `on` transactionCategory )
     where
     summary :: [Transaction] -> SummaryLine
-    summary txs = SummaryLine (category txs) (total txs) 
+    summary txs = Transaction (category txs) (total txs) 
         where
         category = transactionCategory . head
         total    = sum . map transactionAmount
 ``` 
-Note how the `on` function elegantly helps us to write our logic, by composing the functions that are required by `sortBy` and `groupBy`. The signature of this function helps understand how it is doing its work. Since
+Note how `on` helps expressing the logic, by composing the functions that are required by `sortBy` and `groupBy`. 
+Since
 ```haskell
 on :: (b -> b -> c) -> (a -> b) -> a -> a -> c
 ```
@@ -101,32 +130,37 @@ then
 ```haskell
 on compare :: (Ord b) => (a -> b) -> a -> a -> Ordering
 ```
-and 
+and thus
 ```haskell
 on compare transactionCategory :: Transaction -> Transaction -> Ordering
 ```
 which is conform to the type of function required by `sortBy`. Similarly, `on` composed with `(==)` will create a function of the type required by `groupBy`.
 
-Now we can write our main function, which will get a file name on the command line, read that file, convert its content into a list of `Transaction`s, and then compute and print the summary.
+Reporting the summary lines is done by mapping a report function for each summary line, and then merging this list of `String`s in one single `String`:
+```haskell
+report :: [SummaryLine] -> String
+report = unlines . map reportLine 
+    where
+    reportLine tx = 
+        categoryLabel (transactionCategory tx) 
+        ++ ", " ++ show (transactionAmount tx)
+```
+
+We can now write our main function, which will get a file name on the command line, read that file, convert its content into a list of `Transaction`s, and then compute and print the summary.
 ```haskell
 program1 :: IO ()
 program1 = do
     args    <- getArgs
-    content <- readFile (args !! 0)
+    content <- readFile (head args)
     let transactions = map read $ lines content
-    putStrLn $ unlines $ map show $ summarize transactions
-
-main :: IO ()
-main = program1
-
+    putStrLn $ report $ summarize transactions
 ```
-And voilà, we have our program:
+Et voilà, we have our program:
 ```
 $ program1 data/transactions.csv ⏎
-Equipment, 179.0
+Equipment, 211.0
 Groceries, 172.0
 Interest, 38.17
-Investment, 6007.0
 Savings, 500.0
 ```
 
@@ -139,19 +173,32 @@ It is, indeed, a very naive program. What could go wrong?
 
 ```
 $ program1 ⏎
-program1: Prelude.!!: index too large
+program1: Prelude.head: empty list
+
 $ program1 foo ⏎
 program1: foo: openFile: does not exist (No such file or directory)
+
 $ program1 data/wrong.csv ⏎
 program1: Prelude.read: no parse
+
 $ program1 data/empty.csv ⏎
 
 ```
-None of these conditions except the last one is adequately managed by our program, which means that given certain inputs, some of our functions will not return a value, and the program will halt. Let's change this.
+None of these conditions is adequately managed by our program, which means that given certain inputs, some of our functions will not return a value, and the program will halt. Let's change this.
 
-## 2. Responding to failure conditions
+## Program #2: responding to failure conditions
 
-The way to deal with failure is to use data types that can represent the failure (for example in the form of a String) as well as the normal values. The `Either` monad data type is just designed for such representations. To make things a bit clearer, let's define a type synonym for the `String` used as messages.
+We want to deal with failure conditions in a way that does not stop the program, but prints a message instead, and possibly propose a way for the user to remedy the condition. What parts of the program should change? Every part where the program calls a function that is not total.
+
+For example, `head` in the expression `content <- readFile (head args)` is not total and will halt the program after displaying  _"empty list"_. On the other hand, the function:
+```haskell
+lookup :: Eq a => a -> [(a, b)] -> Maybe b
+```
+_is_ a total function, and will not stop the program. 
+
+_(`head` is used inside the function `summary` in the expression `transactionCategory . head`. Does it constitute a risk of halting the program in case we apply it on an empty list? Why?)_
+
+If a function is not total, one safe way to use it is to combine it with a data type that can represent failure. The `Either` type constructor is just designed for such representations. To make things a bit clearer, let's define a type synonym for the `String` used as messages.
 ```haskell
 type Message = String
 ```
@@ -198,25 +245,30 @@ program2 = do
     fileName <- getFileNameArg 
     case fileName of
         Left msg -> putStrLn msg
-        right fp -> do 
-            content <- getfilecontent fp
-            case (content >>= readtransactions) of
-                left msg -> putstrln msg
-                right []  -> putstrln $ "error: no transactions"
-                right txs -> putstrln $ unlines $ map show $ summarize txs
+        Right fp -> do 
+            content <- getFileContent fp
+            case (content >>= readTransactions) of
+                Left msg -> putStrLn msg
+                Right []  -> putStrLn $ "error: no transactions"
+                Right txs -> putStrLn $ report $ summarize txs
+
 main :: IO ()
 main = program2
 ```
-Here are examples of uses:
+Here are examples of use
 ```
 $ program2 ⏎
 Error: no file name given
+
 $ program2 foo ⏎
 Error: foo: openFile: does not exist (No such file or directory)
+
 $ program2 data/wrong.csv ⏎
 Error: incorrect csv format : Foo, bar42
+
 $ program2 data/empty.csv ⏎
 Error: no transactions
+
 $ program2 data/transactions.csv ⏎
 Equipment, 179.0
 Groceries, 172.0
@@ -225,7 +277,7 @@ Investment, 6007.0
 Savings, 500.0
 ```
 ## 3. Monadic actions as isolated contexts
-The use of the bind operator in the middle of the function:
+The expression using `>>=` in the `case .. of` instruction: 
 ```haskell
             ...
             content <- getfilecontent fp
@@ -234,7 +286,7 @@ The use of the bind operator in the middle of the function:
                 right []  -> putstrln $ "error: no transactions"
                 right txs -> putstrln $ unlines $ map show $ summarize txs
 ```
-suggests that we can chain any action of the type `a -> Either Message b` to the value of `content`. For example, we could add new controls to detect an empty transaction list, or to check that no transaction in the list has an empty category:
+can be completed with as many functions of the type `a -> Either Message b` as we want over the initial value of `content`. For example, we could add new controls to detect an empty transaction list, or to check that no transaction in the list has an empty category:
 ```haskell
 
 checkNotEmpty :: [Transaction] -> Either Message [Transaction]
@@ -242,8 +294,8 @@ checkNotEmpty []  = Left "Error: no transactions"
 checkNotEmpty txs = Right txs
 
 checkNotEmptyCategory :: Transaction -> Either Message Transaction
-checkNotEmptyCategory (Transaction "" _) = Left "Error: empty category"
-checkNotEmptyCategory tx                 = Right tx
+checkNotEmptyCategory (Transaction (Category "") _) 
+    = Left "Error: empty category"
 
 program2 :: IO ()
 program2 = do
@@ -258,7 +310,7 @@ program2 = do
                 Left msg -> putStrLn msg
                 Right txs -> putStrLn $ unlines $ map show $ summarize txs
 ```
-This chaining of controls could give the impression that we've missed an opportunity to simplify the code by equally chaining the values obtained by `getFileNameArg` and `getFileContent`. Instead we used explicit `case ... of` branching.
+This chaining of controls could give the impression that we've missed an opportunity to simplify the code of the whole function, by equally chaining the values obtained by `getFileNameArg` and `getFileContent`. Instead we used explicit `case ... of` branching.
 
 Could it be possible to chain _all_ our `Either Message a` functions, like this ?
 
@@ -272,7 +324,7 @@ wrong_program2 = do
                Left msg -> putStrLn msg
                Right txs -> putStrLn $ unlines $ map show $ summarize txs
 ```
-Answer: No. _ghc_ has no less than 6 complaints about this piece of code. Here's (an excerpt of) the first one:
+Answer: No. _ghc_ has no less than 6 complaints about this change to the function. Here's (an excerpt of) the first one:
 
 ```
     • Couldn't match type ‘Either Message String’ with ‘[Char]’
@@ -282,7 +334,7 @@ Answer: No. _ghc_ has no less than 6 complaints about this piece of code. Here's
    |                              ^^^^^^^^^^^^^^
 
 ```
-In essence: we cannot chain monadic actions from the IO monad to the Either monad, and vice versa. Since the `case ... of` is examining a value of type `Either Message [Transaction]`, the expected type for actions leading to that value is `a -> Either Message b`, but we are trying to somehow get to that value through actions of type `a -> IO b`. That can't work.
+In essence: we cannot chain monadic actions from the IO monad to the Either monad, and vice versa. Since the `case ... of` is examining a value of type `Either Message [Transaction]`, the expected type for actions leading to that value is `a -> Either Message b`. But we are trying to somehow get to that value through actions of type `a -> IO b`. That can't work.
 
 We can __always__ bind monadic actions to distinct types through the __same monad__ m :
 ```
@@ -293,7 +345,8 @@ Investment, 4807.00
 . . .
 
 readTransaction "Foo,4807" >>= checkNotEmptyCategory ⏎
-Right (Transaction {transactionCategory = "Foo", transactionAmount = 4807.0})
+Right (Transaction {transactionCategory = Category {categoryLabel = "Foo"}, transactionAmount = 42.0})
+it :: Either Message Transaction
 
 readTransaction ",42" >>= checkNotEmptyCategory ⏎
 Left "Error: empty category"
@@ -306,11 +359,6 @@ ghci ⏎
     • Couldn't match type ‘Either Message’ with ‘IO’
       Expected type: String -> IO [Transaction]
         Actual type: String -> Either Message [Transaction]
-    • In the second argument of ‘(>>=)’, namely ‘readTransactions’
-      In the expression:
-        readFile "data/transactions.csv" >>= readTransactions
-      In an equation for ‘it’:
-          it = readFile "data/transactions.csv" >>= readTransactions
 ```
 
 Of course, it would be nice if we could...

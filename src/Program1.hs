@@ -7,12 +7,8 @@ import Data.List          ( groupBy
 import Data.Function      ( on )
 import Data.Char          ( isAlphaNum )
 
-data Category = Category String
+data Category = Category { categoryLabel :: String }
     deriving (Eq,Ord,Show)
-
-data Transaction = Transaction { transactionCategory :: Category
-                               , transactionAmount   :: Double }
-    deriving (Eq,Ord)
 
 instance Read Category where
     readsPrec _ s = if length label > 0 
@@ -23,30 +19,23 @@ instance Read Category where
         rest  = drop (length label) s
         isLegal c = isAlphaNum c || c == ' '
 
+data Transaction = Transaction { transactionCategory :: Category
+                               , transactionAmount   :: Double }
+    deriving (Eq,Ord,Show)
+
 instance Read Transaction where
     readsPrec _ line = do
-        (categ,r1)  <- reads line
-        (_,r2)      <- readComma r1
-        (number,r3) <- (reads :: ReadS Double) r2
-        let t = Transaction categ number
-        return (t,r3)
+        (categ,  rest1) <- reads line
+        (_,      rest2) <- readComma rest1
+        (number, rest3) <- reads rest2
+        return $ (Transaction categ number, rest3)
             where
             readComma :: ReadS String
             readComma s = case lex s of
                             ((",",r):_) -> return (",",r)
-                            _ -> fail ("no parse with" ++ s)
-instance Show Transaction where
-    show (Transaction (Category c) d) = 
-        c ++ " " ++ show d
+                            _           -> []
 
-data SummaryLine = SummaryLine { summaryCategory :: Category
-                               , summaryAmount   :: Double }
-
-instance Show SummaryLine where
-    show (sl) = 
-        show (summaryCategory sl) 
-        ++ ", " 
-        ++ show (summaryAmount sl)
+type SummaryLine = Transaction
 
 summarize :: [Transaction] -> [SummaryLine] 
 summarize = map summary 
@@ -54,16 +43,23 @@ summarize = map summary
           . sortBy  ( compare `on` transactionCategory )
     where
     summary :: [Transaction] -> SummaryLine
-    summary txs = SummaryLine (category txs) (total txs) 
+    summary txs = Transaction (category txs) (total txs) 
         where
         category = transactionCategory . head
         total    = sum . map transactionAmount
     
+report :: [SummaryLine] -> String
+report = unlines . map reportLine 
+    where
+    reportLine tx = 
+        categoryLabel (transactionCategory tx) 
+        ++ ", " ++ show (transactionAmount tx)
+
 -- reads the given transaction file, outputs its summary
 program1 :: IO ()
 program1 = do
     args    <- getArgs
-    content <- readFile (args !! 0)
+    content <- readFile (head args)
     let transactions = map read $ lines content
-    putStrLn $ unlines $ map show $ summarize transactions
+    putStrLn $ report $ summarize transactions
 
