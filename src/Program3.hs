@@ -93,14 +93,17 @@ checkNotEmptyCategory :: Transaction -> Domain Transaction
 checkNotEmptyCategory (Transaction "" _) = throwE "Error: empty category"
 checkNotEmptyCategory tx                 = return tx
 
-computation :: Domain ()
+computation :: Domain [Summary]
 computation = do 
     filePath     <- getFileNameArg 
     content      <- getFileContent filePath
-    transactions <- readTransactions content
-    let summary = summarize transactions
-    lift $ print summary
-    -- lift $ putStrLn $ report summary
+    unchecked    <- readTransactions content
+    notEmpty     <- checkNotEmpty unchecked
+    transactions <- mapM checkNotEmptyCategory notEmpty
+    return $ summarize transactions
+
 program3 :: IO ()
-program3 = runExceptT computation >> return ()
+program3 = do
+    transactions <- runExceptT computation
+    putStrLn $ report transactions
 
