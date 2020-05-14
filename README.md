@@ -286,16 +286,16 @@ The expression using `>>=` in the `case .. of` instruction:
                 right []  -> putstrln $ "error: no transactions"
                 right txs -> putstrln $ unlines $ map show $ summarize txs
 ```
-can be completed with as many functions of the type `a -> Either Message b` as we want over the initial value of `content`. For example, we could add new controls to detect an empty transaction list, or to check that no transaction in the list has an empty category:
+can be completed with as many functions of the type `a -> Either Message b` as we want over the initial value of `content`. For example, we could add new controls to detect an empty transaction list, or to check that no transaction in the list has amount of zero.
 ```haskell
 
 checkNotEmpty :: [Transaction] -> Either Message [Transaction]
 checkNotEmpty []  = Left "Error: no transactions"
 checkNotEmpty txs = Right txs
 
-checkNotEmptyCategory :: Transaction -> Either Message Transaction
-checkNotEmptyCategory (Transaction (Category "") _) 
-    = Left "Error: empty category"
+checkNonZero :: Transaction -> Either Message Transaction
+checkNonZero (Transaction _ 0) 
+    = Left "Error: amount equal to zero"
 
 program2 :: IO ()
 program2 = do
@@ -306,7 +306,7 @@ program2 = do
             content <- getFileContent fp
             case (content >>= readTransactions 
                           >>= checkNotEmpty 
-                          >>= mapM checkNotEmptyCategory) of
+                          >>= mapM checkNonZero) of
                 Left msg -> putStrLn msg
                 Right txs -> putStrLn $ unlines $ map show $ summarize txs
 ```
@@ -320,7 +320,7 @@ wrong_program2 = do
     case (getFileNameArg >>= getFileContent
                          >>= readTransactions 
                          >>= checkNotEmpty 
-                         >>= mapM checkNotEmptyCategory) of
+                         >>= mapM checkNonZero) of
                Left msg -> putStrLn msg
                Right txs -> putStrLn $ unlines $ map show $ summarize txs
 ```
@@ -344,12 +344,12 @@ Groceries, 100.00
 Investment, 4807.00
 . . .
 
-readTransaction "Foo,4807" >>= checkNotEmptyCategory ⏎
+readTransaction "Foo,4807" >>= checkNonZero ⏎
 Right (Transaction {transactionCategory = Category {categoryLabel = "Foo"}, transactionAmount = 42.0})
 it :: Either Message Transaction
 
-readTransaction ",42" >>= checkNotEmptyCategory ⏎
-Left "Error: empty category"
+readTransaction "Foo,0" >>= checkNonZero ⏎
+Left "Error: amount equal to zero"
 ```
 but we can __never__ do that through different monadic types:
 ```

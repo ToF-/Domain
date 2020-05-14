@@ -85,10 +85,10 @@ checkNotEmpty :: [Transaction] -> Either Message [Transaction]
 checkNotEmpty []  = Left "Error: no transactions"
 checkNotEmpty txs = Right txs
 
-checkNotEmptyCategory :: Transaction -> Either Message Transaction
-checkNotEmptyCategory (Transaction (Category "") _) 
-    = Left "Error: empty category"
-checkNotEmptyCategory tx                 = Right tx
+checkNonZero :: Transaction -> Either Message Transaction
+checkNonZero (Transaction _ 0) 
+    = Left "Error: amount equal to zero"
+checkNonZero tx                 = Right tx
 
 -- reads the given transaction file, outputs its summary
 program2 :: IO ()
@@ -100,7 +100,7 @@ program2 = do
             content <- getFileContent fp
             case (content >>= readTransactions
                           >>= checkNotEmpty
-                          >>= mapM checkNotEmptyCategory) of
+                          >>= mapM checkNonZero) of
                 Left msg -> putStrLn msg
                 Right []  -> putStrLn $ "error: no transactions"
                 Right txs -> putStrLn $ report $ summarize txs
