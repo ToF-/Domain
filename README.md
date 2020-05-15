@@ -1,8 +1,6 @@
 # Scratching the surface of Monad Transformers
 
-In this post I am playing with the `ExceptT` monad transformer in order to make a simple program even simpler.
-
-Let's say we want to write a program that reads a csv file containing _transactions_ of the form _(category, amount)_, and prints a summary by category of these transactions.
+Let's say we want to write a program that reads a csv file containing transactions, which are composed of a category and an amount, and prints the total amount for each category.
 
 For instance, given a file `transactions.csv` containing this data:
 ```
@@ -46,11 +44,14 @@ Let’s define adequate data types for our program. A _Category_ can be created 
 data Category = Category { categoryLabel :: String }
     deriving (Eq, Show)
 ```
-We need a way to `read` a `Category` from a `String`, so let's make this type an instance of the `Read` class. Parsing a category label amounts to reading alphanumeric chars, possibly spaces, e.g `"Credit Cards Payments"`.
+We need a way to `read` a `Category` from a `String`, so let's make this type an instance of the `Read` class. Parsing a category label amounts to reading alphanumeric chars and possibly spaces, and rejecting everything else. 
+For intance `"Credit Cards Payments"` and `"1st aid kit"` are valid categories, while `"( wrong !)"` isn't.
+
+`readsPrec` is the function that we need to implement. It has the signature ` :: Int -> String -> [(a,String)]` where the first argument is the precedence level (which we don't need to specify for our simple program), the second argument is the `String` to be parsed, and the result is a list of possible results. An empty list means that the string cannot be parsed to a value of the given type. 
 
 ```haskell
 instance Read Category where
-    readsPrec _ s = if length label > 0 
+    readsPrec _ s = if not (null label) 
                        then return (Category label, rest) 
                        else []
         where 
@@ -58,20 +59,20 @@ instance Read Category where
         rest  = drop (length label) s
         isLegal c = isAlphaNum c || c == ' '
 ```
-The `readsPrec` is the function that is called by `read` and `reads`. It has signature ` :: Int -> String -> [(a,String)]` where the first argument is the precedence level (which we don't care about it) the second is the string to be parsed, and the result is a list of possible values. An empty list means that the string cannot be parsed to a value of the given type. Let's try to `read` a `Category` with _ghci_:
+Examining the input string, `readsPrec` takes all its legal characters and returns a `Category` value and the remaining chararcters, or the empty list if not a legal character was found. 
+Let's try to `read` a `Category` using _ghci_:
 ```
+> import Program1.hs ⏎
 > read "Foo" :: Category ⏎
 Category "Foo"
-it :: Category
 
 > read "*$!" :: Category ⏎
 *** Exception: Prelude.read: no parse
 
 (reads :: ReadS Category) "Bar, 42" ⏎
 [(Category "Bar",",42")]
-it :: [(Category, String)]
 ```
-_Transaction_ it the product of a _Category_ and a `Double` floating amount. We can `read` transactions, so we need to implement `readsPrec` for this type as well.
+`Transaction` it composed with a `Category` and a `Double`. Since we want to `read` transactions, we need to implement `readsPrec` for this type as well.
 ```haskell
 data Transaction = Transaction { transactionCategory :: Category
                                , transactionAmount   :: Double }
@@ -89,12 +90,11 @@ instance Read Transaction where
                             ((",",r):_) -> return (",",r)
                             _           -> []
 ```
-Since `readsPrec` is chaining computations on the list monad -- it reads a `Category`, then a comma (and discards it), then a `Double` value -- it will result in an empty list as soon as one of the three parsers fails.
+`readsPrec` is chaining computations on the list monad: it first reads a `Category`, then a comma (discarding it), then a `Double` value. Chaining these three parsers ensures that the evaluation will result in an empty list as soon as one of the three parsers returns an empty list.
 
 ```
 > read "Foo, 42" :: Transaction ⏎
 Transaction {transactionCategory = Category "Foo", transactionAmount = 42.0}
-it :: Transaction
 
 > read ", 42" :: Transaction ⏎
 *** Exception: Prelude.read: no parse
@@ -103,10 +103,20 @@ it :: Transaction
 *** Exception: Prelude.read: no parse
 >
 ```
-A _Summary Line_ has the exact same structure as a `Transaction`. We define it as a type synonym to gain clarity in signatures. T
-And we also should be able to `show` a Summary Line:
+A summary line having the exact same structure as transaction, we can define it as a type synonym.
 
-To summarize the Transactions by category, we sort them by category, group them by category, and for each group, create a Summary Line with the category and total amount of the group:
+Also we should be able to `display` transactions:
+
+```haskell
+type SummaryLine = Transaction
+
+display :: Transaction -> String
+display t = categoryLabel (transactionCategory t) 
+           ++ ", " ++ show (transactionAmount t)
+           ```
+
+
+To summarize the transactions, we sort them by category, group them by category, and for each group, create a `SummaryLine` with the category and total amount of the group:
 ```haskell
 type SummaryLine = Transaction
 
@@ -136,14 +146,10 @@ on compare transactionCategory :: Transaction -> Transaction -> Ordering
 ```
 which is conform to the type of function required by `sortBy`. Similarly, `on` composed with `(==)` will create a function of the type required by `groupBy`.
 
-Reporting the summary lines is done by mapping a report function for each summary line, and then merging this list of `String`s in one single `String`:
+Reporting summary lines is done by mapping our `display` function for each line, and then `unline`ing, i.e. merging this list of `String`s into one single `String`:
 ```haskell
 report :: [SummaryLine] -> String
-report = unlines . map reportLine 
-    where
-    reportLine tx = 
-        categoryLabel (transactionCategory tx) 
-        ++ ", " ++ show (transactionAmount tx)
+report = unlines . map display
 ```
 
 We can now write our main function, which will get a file name on the command line, read that file, convert its content into a list of `Transaction`s, and then compute and print the summary.

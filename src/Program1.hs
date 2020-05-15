@@ -37,6 +37,11 @@ instance Read Transaction where
 
 type SummaryLine = Transaction
 
+display :: Transaction -> String
+display t = categoryLabel (transactionCategory t) 
+           ++ ", " ++ show (transactionAmount t)
+
+
 summarize :: [Transaction] -> [SummaryLine] 
 summarize = map summary 
           . groupBy ( (==)    `on` transactionCategory ) 
@@ -49,11 +54,7 @@ summarize = map summary
         total    = sum . map transactionAmount
     
 report :: [SummaryLine] -> String
-report = unlines . map reportLine 
-    where
-    reportLine tx = 
-        categoryLabel (transactionCategory tx) 
-        ++ ", " ++ show (transactionAmount tx)
+report = unlines . map display
 
 -- reads the given transaction file, outputs its summary
 program1 :: IO ()
