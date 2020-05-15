@@ -68,11 +68,10 @@ readTransactions :: String -> Either Message [Transaction]
 readTransactions = mapM readTransaction . lines
 
 getFileContent :: FilePath -> IO (Either Message String)
-getFileContent fp = 
-    (readFile fp >>= return . Right) `catch` handle
+getFileContent fp = (fmap Right $ readFile fp) `catch` handle 
     where
     handle :: IOException -> IO (Either Message String)
-    handle e = return $ Left $ "Error: " ++ (show e) 
+    handle = return . Left . ("Error: " ++) . show
 
 getFileNameArg :: IO (Either Message String)
 getFileNameArg = do

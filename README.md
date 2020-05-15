@@ -194,21 +194,23 @@ None of these conditions is adequately managed by our program, which means that 
 
 ## Program #2: responding to failure conditions
 
-We want to deal with failure conditions in a way that does not stop the program, but prints a message instead, and possibly propose a way for the user to remedy the condition. What parts of the program should change? Every part where the program calls a function that is not total.
+We want to deal with failure conditions in a graceful way. Our program should not stop abruptly with a strange message like `no parse`, but instead not print a clear diagnostic, and possibly propose a way for the user to remedy the condition.
 
-For example, `head` in the expression `content <- readFile (head args)` is not total and will halt the program after displaying  _"empty list"_. On the other hand, the function:
+What parts of the program should change? Well, every part where the program calls a function that is not _total_. A function is said to be total if it returns a result for each possible value of its argument.
+
+For example, `head` in the expression `content <- readFile (head args)` is not total and could halt the program, with an _"empty list"_ message. On the other hand, the function:
 ```haskell
 lookup :: Eq a => a -> [(a, b)] -> Maybe b
 ```
-_is_ a total function, and will not stop the program. 
+for example _is_ a total function, and will not interrupt the program. 
 
-_(`head` is used inside the function `summary` in the expression `transactionCategory . head`. Does it constitute a risk of halting the program in case we apply it on an empty list? Why?)_
+☞ _(`head` is used inside the function `summary` in the expression `transactionCategory . head`. Does it constitute a risk of halting the program in case we apply it on an empty list? Why?)_
 
-If a function is not total, one safe way to use it is to combine it with a data type that can represent failure. The `Either` type constructor is just designed for such representations. To make things a bit clearer, let's define a type synonym for the `String` used as messages.
+If a function is not total, one safe way to use it is to combine it with a data type that can represent failure. The `Either` type constructor is just designed for such representations, and we will us it. To make things a bit clearer, let's first define a type synonym for the `String` used as messages.
 ```haskell
 type Message = String
 ```
-Our most frequent concern will be about the file data format, so let's create functions that will manage faulty csv data:
+Our most frequent concern will be about the file data format, so let's create a reader function that will manage faulty csv data in a graceful way:
 ```haskell
 readTransaction :: String -> Either Message Transaction
 readTransaction s = 
@@ -219,21 +221,31 @@ readTransaction s =
 readTransactions :: String -> Either Message [Transaction]
 readTransactions = mapM readTransaction . lines
 ```
-The `mapM :: (Traversable t, Monad m) => (a -> m b) -> t a -> m (t b)` function is used to apply a monadic action to the elements of a structure, here making a `[Either Message Transaction]` into an `[Either Message [Transaction]`.
+The `mapM :: (Traversable t, Monad m) => (a -> m b) -> t a -> m (t b)` function is used to chain a monadic action to the elements of a structure and return a single monadic value. Here, it transposes a `[Either Message Transaction]` into an `Either Message [Transaction]`.
 
 
-What if the file can't be open? Using `Control.Exception` will help us to deal with such situation:
+What if the file can't be open? Using `Control.Exception` will help us dealing with such situation:
 ```haskell
 getFileContent :: FilePath -> IO (Either Message String)
-getFileContent fp = 
-    (readFile fp >>= return . Right) `catch` handle
+getFileContent fp = (fmap Right $ readFile fp) `catch` handle 
     where
     handle :: IOException -> IO (Either Message String)
-    handle e = return $ Left $ "Error: " ++ (show e) 
+    handle = return . Left . ("Error: " ++) . show
 ```
-Note that our function returns a `IO (Either Message String)` value, not a `Either Message String`. There is no safe way to convert an IO value into a non-IO value. That should not be a problem, because `getFileContent` will solely used within the context of an IO action and nowhere else.
+The `catch :: IOException e => IO a -> (e -> IO a) -> IO a` function is our "graceful exit" instrument here: given an IO action and a handler function, it will catch any IO exception, returning the result of applying the handler on the exception. In our case, what we want to do with the exception is :
+- `show` it into a `String` starting with `"Error: "`,
+- make this message a `Left` value, 
+- `return` this left value, making it an `IO (Either Message String)`
 
-Another IO function has to do with getting the first argument on the command line:
+In the case when no exception is triggered, `readFile` will give us an `IO String` value. What we do is to make that value an `Either Message String` by mapping the `Right` constructor to it.
+
+Note that our function returns a `IO (Either Message String)` value. Why not return a `Either Message String` instead? Because there is no safe way to convert an IO value into a non-IO value. Any function dealing with IO is partial, not total, because IO actions are always prone to some failure condition. If we could compile a function with signature `IO a -> a` then two things would happen:
+- Haskell's type checker would be much less useful to detect problems in our constructions,
+- we would be hiding to ourselves some crucial concern with our program reliability.
+
+Anyway, the fact that `getFileContent` returns a `IO` value should not be a problem, because it will be used within the context of an IO action and nowhere else.
+
+Another IO function has to do with getting the first argument on the command line, now making the absence of argument a safe condition that will produce a `Left Message` value:
 ```haskell
 getFileNameArg :: IO (Either Message String)
 getFileNameArg = do
@@ -243,7 +255,7 @@ getFileNameArg = do
                     else Right (args !! 0)
 ```
 
-Our main program can now examine the values returned by `get`... functions and branch accordingly instead of halting:
+Our main program will examine the values returned by `get`... functions and branch accordingly instead of halting:
 
 ```haskell
 program2 :: IO ()
@@ -261,7 +273,7 @@ program2 = do
 main :: IO ()
 main = program2
 ```
-Here are examples of use
+And now ous program is dealing with failures in a slightly improved way:
 ```
 $ program2 ⏎
 Error: no file name given
