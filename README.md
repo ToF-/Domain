@@ -505,9 +505,100 @@ What we have done so far:
 - which means we can chain monadic functions on these values and benefit from the built in of bind (`>>=`) for `Either` values,
 - when a function leads to failure, the chaining is shortcut and we get a `Left` value,  
 - we can also get values from IO operations, without having to use a distinct monad, by `lift`ing these operation into the `ExceptT` monad.
-- thanks to excepction `catch`ing, when an exception occurs on the IO operation, we also get a `Left` values.
+- thanks to exception `catch`ing, when a failure occurs on the IO operation, we also get a `Left` values.
 
-## Program #3: A chain of actions with graceful exit
+## Program #3: A chain of actions that can fail gracefully
 
 Let's integrate these ideas into our program.
+```haskell
+import Control.Monad.Trans.Except ( ExceptT (..)
+                                  , runExceptT
+                                  , throwE
+                                  )
+
+import Control.Monad.Trans.Class     ( lift )
+```
+`Domain` is the type of values possibly acquired from IO operations, and that can indicate failure:
+```haskell
+type Domain = ExceptT Message IO
+```
+We can rewrite our conversion and control functions, using `throwE :: Monad m => e -> ExceptT e m a` instead of `Left`:
+```haskell
+readTransaction :: String -> Domain Transaction
+readTransaction s = 
+    case reads s of
+      []        -> throwE ("incorrect csv format : " ++ s)
+      ((t,_):_) -> return t
+
+readTransactions :: String -> Domain [Transaction]
+readTransactions = mapM readTransaction . lines
+
+checkNotEmpty :: [Transaction] -> Domain [Transaction]
+checkNotEmpty []  = throwE "no transactions"
+checkNotEmpty txs = return txs
+
+checkNonZero :: Transaction -> Domain Transaction
+checkNonZero (Transaction _ 0) = throwE "amount equal to zero"
+checkNonZero tx                 = return tx
+```
+Acquiring the csv file name will follow the logic we experimented interactively:
+
+```haskell
+getFileNameArg :: Domain FilePath
+getFileNameArg = do
+    args <- lift getArgs
+    if null args then lift promptForFileName
+                 else return (args !! 0)
+                     where
+    promptForFileName :: IO String
+    promptForFileName = putStrLn "please enter a file name:" >> getLine
+```
+Dealing with IO exception implies using and wraping the `catch` expression into the `ExceptT` monad:
+```haskell
+getFileContent :: FilePath -> Domain String
+getFileContent fp = ExceptT $ (readFileE fp) `catch` handleE
+    where
+    readFileE :: FilePath -> IO (Either Message String)
+    readFileE filePath =  Right <$> readFile filePath
+
+    handleE :: IOException -> IO (Either Message String)
+    handleE = return . Left . show
+```
+Note that we use the `<$>` an infix shortcut for `fmap`, since we need to apply the `Right` function into the IO value that `readFile` aquired.
+
+Now we can chain all these acquiring and controlling functions into a single one:
+```haskell
+getTransactions :: Domain [Transaction]
+getTransactions = do 
+    filePath     <- getFileNameArg 
+    content      <- getFileContent filePath
+    unchecked    <- readTransactions content
+    notEmpty     <- checkNotEmpty unchecked
+    transactions <- mapM checkNonZero notEmpty
+    return $ transactions
+```
+Of course, using variables and left arrow is one way to make the chaining of action explicit. Another way is to use the bind operator:
+```haskell
+getTransactions :: Domain [Transaction]
+getTransactions  = getFileNameArg >>= getFileContent >>= readTransactions 
+               >>= checkNotEmpty  >>= mapM checkNonZero 
+```
+We need a way to output the result of our program, be it a failure or a valid list of summary lines:
+
+```haskell
+report :: Either Message [SummaryLine] -> String
+report (Left msg)   = "Error: " ++ msg
+report (Right sums) = unlines $ map showSummaryLine sums
+```
+Our main program will get the transactions, summarize them, and print the report:
+```haskell
+program3 :: IO ()
+program3 = do
+    transactions <- runExceptT getTransactions
+    putStrLn $ report $ summarize <$> transactions
+
+main :: IO ()
+main = program3
+```
+Again, `<$>` is used instead of `$`: since `transactions` is bound to an `Either Message [Transaction]` value, we have to map `summarize` to its value instead of just applying it.
 

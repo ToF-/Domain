@@ -71,28 +71,24 @@ summarize = map summary
 showSummaryLine :: SummaryLine -> String
 showSummaryLine sl = categoryLabel (transactionCategory sl) ++ ", " ++ show (transactionAmount sl)
 
-report :: Either Message [SummaryLine] -> String
-report (Left msg)   = "Error: " ++ msg
-report (Right [])   = "No transactions to summarize" 
-report (Right sums) = unlines $ map showSummaryLine sums
-
-catchE :: IO a -> Domain a
-catchE action = ExceptT (action `catchIO` handle)
-    where
-    catchIO :: IO a -> (IOException -> IO (Either Message a)) -> IO (Either Message a)
-    a `catchIO` h = (Right <$> a) `catch` h
-
-    handle :: IOException -> IO (Either Message a)
-    handle = return . Left . show
-
 getFileContent :: FilePath -> Domain String
-getFileContent fp = catchE $ readFile fp
+getFileContent fp = ExceptT $ (readFileE fp) `catch` handleE
+    where
+    readFileE :: FilePath -> IO (Either Message String)
+    readFileE filePath =  Right <$> readFile filePath
+
+    handleE :: IOException -> IO (Either Message String)
+    handleE = return . Left . show
 
 getFileNameArg :: Domain FilePath
 getFileNameArg = do
     args <- lift getArgs
-    if null args then throwE "no file name given" 
+    if null args then lift promptForFileName
                  else return (args !! 0)
+                     where
+    promptForFileName :: IO String
+    promptForFileName = putStrLn "please enter a file name:" >> getLine
+
 
 checkNotEmpty :: [Transaction] -> Domain [Transaction]
 checkNotEmpty []  = throwE "no transactions"
@@ -102,17 +98,16 @@ checkNonZero :: Transaction -> Domain Transaction
 checkNonZero (Transaction _ 0) = throwE "amount equal to zero"
 checkNonZero tx                 = return tx
 
-computation :: Domain [SummaryLine]
-computation = do 
-    filePath     <- getFileNameArg 
-    content      <- getFileContent filePath
-    unchecked    <- readTransactions content
-    notEmpty     <- checkNotEmpty unchecked
-    transactions <- mapM checkNonZero notEmpty
-    return $ summarize transactions
+getTransactions :: Domain [Transaction]
+getTransactions  = getFileNameArg >>= getFileContent >>= readTransactions 
+               >>= checkNotEmpty  >>= mapM checkNonZero 
+
+report :: Either Message [SummaryLine] -> String
+report (Left msg)   = "Error: " ++ msg
+report (Right sums) = unlines $ map showSummaryLine sums
 
 program3 :: IO ()
 program3 = do
-    transactions <- runExceptT computation
-    putStrLn $ report transactions
+    transactions <- runExceptT getTransactions
+    putStrLn $ report $ summarize <$> transactions
 
