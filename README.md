@@ -448,11 +448,66 @@ Left "foo: openFile: does not exist (No such file or directory)"
 ```
 And now our function handles exceptions correctly. 
 
+Another example of how `ExceptT` makes `IO` and `Either` working together seamlessly: one of our functions extracts the csv file name from the arguments provided on the command line, returning a `Left` if no argument was given. Could it instead prompt the user for a file name?
+
+Let's write a prompt function:
+```
+> promptForFileName = putStrLn "please enter a file name:" >> getLine ⏎
+```
+and then use it when matching the empty list pattern, or else extracting the first argument:
+```
+> :{
+| getFileName :: [String] -> ExceptT Message IO FilePath
+| getFileName []      = ExceptT $ fmap Right $ prompt
+| getFileName (arg:_) = ExceptT $ return $ Right arg
+| :} ⏎
+
+> runExceptT $ getFileName ["data/transactions.csv"] ⏎
+Right "data/transactions.csv"
+
+> runExceptT $ getFileName [] ⏎
+please enter a file name:
+data/transactions.csv ⏎
+Right "data/transactions.csv"
+
+>
+```
+This works beautifully: in one case we convert an `IO String` into an `IO (Either Message String)` and then nest that value into an `ExceptT`. In the other case we nest a `Right` value into `IO` (getting also an `IO (Either Message String)`) and also nest that value into an `ExceptT`.
+
+But all this converting is tedious. First, since `ExceptT` is a monad, it offers a `return` function. Let' use it.
+
+```
+> :{
+| getFileName :: [String] -> ExceptT Message IO FilePath
+| getFileName []      = ExceptT $ fmap Right $ prompt
+| getFileName (arg:_) = return arg
+| :}
+```
+Secondly, the combination `ExceptT . fmap Right` can be done using a general function found in `Control.Monad.Trans.Class`: 
+
+> `lift :: Monad m => m a -> t m a`
+> 
+> Lift a computation from the argument monad to the constructed monad.
+> 
+
+```
+import Control.Monad.Trans.Class ⏎
+> :{
+| getFileName :: [String] -> ExceptT Message IO FilePath
+| getFileName []      = lift prompt
+| getFileName (arg:_) = return arg
+| :}
+```
+
 What we have done so far: 
 - we have composed together an "either" monad with the IO monad, using the `ExceptT` monad transformer,
 - we can hold values and extract them into an `Either` data type,
 - which means we can chain monadic functions on these values and benefit from the built in of bind (`>>=`) for `Either` values,
 - when a function leads to failure, the chaining is shortcut and we get a `Left` value,  
-- we can also get values from IO operations, without having to use a distinct monad,
-- when an exception occurs on the IO operation, we also get a `Left` values.
+- we can also get values from IO operations, without having to use a distinct monad, by `lift`ing these operation into the `ExceptT` monad.
+- thanks to excepction `catch`ing, when an exception occurs on the IO operation, we also get a `Left` values.
+
+## Program #3: A chain of actions with graceful exit
+
+Let's integrate these ideas into our program.
 
