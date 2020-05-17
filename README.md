@@ -1,5 +1,13 @@
 # Scratching the surface of Monad Transformers
 
+In this blog post I present a way to chain monadic actions and controls with the `ExceptT` Monad Transformer in Haskell through a small example, in 4 steps:
+- writing a naïve implementation, which halts on IO exception
+- improving its robustness with conditionals and pattern matching
+- combining `IO` and `Either` using `ExceptT` 
+- refactoring the program's chaining of actions
+ 
+## Program #1: A naive solution
+
 Let's say we want to write a program that reads a csv file containing transactions, which are composed of a category and an amount, and prints the total amount for each category.
 
 For instance, given a file `transactions.csv` containing this data:
@@ -20,7 +28,6 @@ Groceries, 172.0
 Interest, 38.17
 Savings, 500.0
 ```
-## Program #1: A naive solution
 
 Our program will 
 
