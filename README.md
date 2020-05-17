@@ -1,5 +1,11 @@
 # Scratching the surface of Monad Transformers
 
+Haskell makes it possible to write statically typed, purely functional programs:
+- any incoherence in the type of our expressions and sequences can be spotted at compile time
+- we can rule out the use of partial functions, wrapping their results in new data types
+
+When a program as to process IO (and all interesting programs have to), static types and purity might seem to get in a way for a beginner. We use the `IO` Monad to get `IO` values, and the `Either` Monad to deal with failures, but combining the two makes our program cumbersome. Monad Transformers help us simplify our program, mainly by hiding the boilerplate aspect of this combination.
+
 In this blog post I present a way to chain monadic actions and controls with the `ExceptT` Monad Transformer in Haskell through a small example, in 4 steps:
 - writing a naïve implementation, which halts on IO exception
 - improving its robustness with conditionals and pattern matching
@@ -587,10 +593,13 @@ getTransactions = do
 Of course, using variables and left arrow is one way to make the chaining of action explicit. Another way is to use the bind operator:
 ```haskell
 getTransactions :: Domain [Transaction]
-getTransactions  = getFileNameArg >>= getFileContent >>= readTransactions 
-               >>= checkNotEmpty  >>= mapM checkNonZero 
+getTransactions  = getFileNameArg 
+               >>= getFileContent 
+               >>= readTransactions 
+               >>= checkNotEmpty  
+               >>= mapM checkNonZero 
 ```
-We need a way to output the result of our program, be it a failure or a valid list of summary lines:
+Finally, we need a way to output the result of our program, be it a failure or a valid list of summary lines:
 
 ```haskell
 report :: Either Message [SummaryLine] -> String
@@ -609,3 +618,8 @@ main = program3
 ```
 Again, `<$>` is used instead of `$`: since `transactions` is bound to an `Either Message [Transaction]` value, we have to map `summarize` to its value instead of just applying it.
 
+## Conclusion
+
+In this blog post, we went from a naïve haskell program doing IOs, to a less naïve implementation that deals with exceptions and failures, while trying to keep the program flow simple and the amount of boiler plate to a minimum. I hope you enjoyed it and learned from it. I would greatly appreciate feedback! You can write me at cthibauttof@gmail.com or send me a direct message on Twitter: @ToF_.
+
+The distinct versions of the program can be found on [github](https://github.com/ToF-/Domain)

@@ -1,19 +1,20 @@
 module Program3           
     where
 
-import System.Environment ( getArgs )
-import Data.List          ( groupBy
-                          , sortBy  )
-import Data.Function      ( on )
-import Data.Char          ( isAlphaNum )
-import Control.Exception  ( IOException
-                          , catch )
-import Control.Monad.Trans.Except ( ExceptT (..)
-                                  , runExceptT
-                                  , throwE
-                                  )
-
-import Control.Monad.Trans.Class     ( lift )
+import Data.Char                   ( isAlphaNum )
+import Data.Function               ( on )
+import Data.List                   ( groupBy
+                                   , sortBy  
+                                   )
+import Control.Exception           ( IOException
+                                   , catch 
+                                   )
+import Control.Monad.Trans.Class   ( lift )
+import Control.Monad.Trans.Except  ( ExceptT (..)
+                                   , runExceptT
+                                   , throwE
+                                   )
+import System.Environment          ( getArgs )
 
 data Category = Category { categoryLabel :: String }
     deriving (Eq,Ord,Show)
@@ -43,8 +44,7 @@ instance Read Transaction where
                             ((",",r):_) -> return (",",r)
                             _           -> []
 type Message = String
-
-type Domain = ExceptT Message IO
+type Domain  = ExceptT Message IO
 
 readTransaction :: String -> Domain Transaction
 readTransaction s = 
@@ -69,7 +69,8 @@ summarize = map summary
         total    = sum . map transactionAmount
     
 showSummaryLine :: SummaryLine -> String
-showSummaryLine sl = categoryLabel (transactionCategory sl) ++ ", " ++ show (transactionAmount sl)
+showSummaryLine sl = categoryLabel (transactionCategory sl) 
+                     ++ ", " ++ show (transactionAmount sl)
 
 getFileContent :: FilePath -> Domain String
 getFileContent fp = ExceptT $ (readFileE fp) `catch` handleE
@@ -99,8 +100,11 @@ checkNonZero (Transaction _ 0) = throwE "amount equal to zero"
 checkNonZero tx                 = return tx
 
 getTransactions :: Domain [Transaction]
-getTransactions  = getFileNameArg >>= getFileContent >>= readTransactions 
-               >>= checkNotEmpty  >>= mapM checkNonZero 
+getTransactions  = getFileNameArg 
+               >>= getFileContent 
+               >>= readTransactions 
+               >>= checkNotEmpty  
+               >>= mapM checkNonZero 
 
 report :: Either Message [SummaryLine] -> String
 report (Left msg)   = "Error: " ++ msg
