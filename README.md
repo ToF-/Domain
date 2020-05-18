@@ -447,7 +447,13 @@ runExceptT value ⏎
 Right [Transaction {transactionCategory = Category {categoryLabel = "Groceries"}, transactionAmount = 42.0}]
 
 runExceptT $ fromFile "../data/transactions.csv" ⏎
-Right [Transaction {transactionCategory = Category {categoryLabel = "Groceries"}, transactionAmount = 100.0},Transaction {transactionCategory = Category {categoryLabel = "Savings"}, transactionAmount = 500.0},Transaction {transactionCategory = Category {categoryLabel = "Equipment"}, transactionAmount = 32.0},Transaction {transactionCategory = Category {categoryLabel = "Groceries"}, transactionAmount = 42.0},Transaction {transactionCategory = Category {categoryLabel = "Interest"}, transactionAmount = 38.17},Transaction {transactionCategory = Category {categoryLabel = "Groceries"}, transactionAmount = 30.0},Transaction {transactionCategory = Category {categoryLabel = "Equipment"}, transactionAmount = 179.0}]
+Right [Transaction {transactionCategory = Category {categoryLabel = "Groceries"}, transactionAmount = 100.0}
+,Transaction {transactionCategory = Category {categoryLabel = "Savings"}, transactionAmount = 500.0}
+,Transaction {transactionCategory = Category {categoryLabel = "Equipment"}, transactionAmount = 32.0}
+,Transaction {transactionCategory = Category {categoryLabel = "Groceries"}, transactionAmount = 42.0}
+,Transaction {transactionCategory = Category {categoryLabel = "Interest"}, transactionAmount = 38.17}
+,Transaction {transactionCategory = Category {categoryLabel = "Groceries"}, transactionAmount = 30.0}
+,Transaction {transactionCategory = Category {categoryLabel = "Equipment"}, transactionAmount = 179.0}]
 ```
 Naturally our function doesn't handle exceptions :
 ```
