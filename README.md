@@ -105,7 +105,7 @@ instance Read Transaction where
                             _           -> []
 ```
 
-`This` `readsPrec` is a bit more complicated: it is chaining computations on the list monad, reading first a `Category`, then a comma (and discarding it), then a `Double` value. Chaining these three parsers ensures that the evaluation will result in an empty list as soon as one of the three parsers returns an empty list.
+*This* `readsPrec` is a bit more complicated: it is chaining computations on the list monad, reading first a `Category`, then a comma (and discarding it), then a `Double` value. Chaining these three parsers ensures that the evaluation will result in an empty list as soon as one of the three parsers returns an empty list.
 
 
 ☞ *(To illustrate the effect of failure in a chain of list actions try this expression in ghci:*
@@ -125,18 +125,19 @@ Transaction {transactionCategory = Category "Foo", transactionAmount = 42.0}
 *** Exception: Prelude.read: no parse
 >
 ```
-A summary line having the exact same structure as transaction, we can define it as a type synonym.
+Since a *summary line* has the exact same structure as a *transaction*, we choose to define it as a type synonym.
 
-Also we should be able to `display` transactions:
+Also we should be able to `display` summary lines:
 
 ```haskell
 type SummaryLine = Transaction
 
-display :: Transaction -> String
+display :: SummaryLine -> String
 display t = categoryLabel (transactionCategory t) 
            ++ ", " ++ show (transactionAmount t)
 ```
-To summarize the transactions, we sort them by category, group them by category, and for each group, create a `SummaryLine` with the category and total amount of the group:
+
+To *summarize* the transactions is to sort them by category, group them by category, and for each group, create a `SummaryLine` with the category and total amount of the group:
 ```haskell
 type SummaryLine = Transaction
 
@@ -210,7 +211,7 @@ program1: Prelude.read: no parse
 $ program1 data/empty.csv ⏎
 
 ```
-None of these conditions is adequately managed by our program, which means that given certain inputs, some of our functions will not return a value, and the program will halt. Let's change this.
+None of these conditions is adequately managed, which means that given certain inputs, some of the functions will not return a value, and the program will halt. Let's change this.
 
 ## Program #2: responding to failure conditions
 
