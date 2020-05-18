@@ -191,7 +191,7 @@ Interest, 38.17
 Savings, 500.0
 ```
 
-It is, indeed, a very naive program. What could go wrong? 
+It is, indeed, a very naïve program. What could go wrong? 
 
 * we could forget to specify a file name when lauching the program from the command line
 * we could specify a file name that doesn't correspond to an existing file
