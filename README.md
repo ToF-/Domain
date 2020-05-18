@@ -1,15 +1,15 @@
 # Scratching the surface of Monad Transformers
 
-Haskell makes it possible to write statically typed, purely functional programs, which brings two interesting advantages:
+Haskell makes it possible to write statically typed, purely functional programs. This gives us two interesting conveniences:
 
 - any incoherence in the type of our expressions and sequences can be spotted at compile time,
-- we can rule out the use of partial functions, wrapping their results in new data types, and compose values of these type.
+- we can rule out the use of partial functions, by wrapping their results in new data types, and compose values of these type.
 
-When a program has to process IO (as any useful program will), static types and purity might seem to get in the way for a beginner. We use the `IO` Monad to get `IO` values, and the `Either` Monad to deal with failures, but combining the two makes our program cumbersome. 
+However, when a program has to process IO (as any useful program will), static types and purity might seem to get in the way for a beginner. We can use the `IO` Monad to get `IO` values, and the `Either` Monad to deal with failures, but combining the two makes our programs cumbersome. 
 
-Monad Transformers can help us simplify our program, by hiding the boilerplate code that this combination requires.
+Monad Transformers can help us write simpler programs, by hiding the boilerplate code that this combination requires.
 
-In this blog post I present a way to chain monadic actions and controls with the `ExceptT` Monad Transformer in Haskell through a small example, in 4 steps:
+In this blog post I present how to chain monadic actions and controls with the `ExceptT` Monad Transformer in Haskell through a small example, in 4 steps:
 - writing a naïve implementation, which halts on IO exception
 - improving its robustness with conditionals and pattern matching
 - combining `IO` and `Either` using `ExceptT` 
@@ -129,9 +129,7 @@ type SummaryLine = Transaction
 display :: Transaction -> String
 display t = categoryLabel (transactionCategory t) 
            ++ ", " ++ show (transactionAmount t)
-           ```
-
-
+```
 To summarize the transactions, we sort them by category, group them by category, and for each group, create a `SummaryLine` with the category and total amount of the group:
 ```haskell
 type SummaryLine = Transaction
