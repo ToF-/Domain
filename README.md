@@ -2,22 +2,22 @@
 
 Haskell makes it possible to write statically typed, purely functional programs. This gives us two interesting conveniences:
 
-- any incoherence in the type of our expressions and sequences can be spotted at compile time,
-- we can rule out the use of partial functions, by wrapping their results in new data types, and compose values of these type.
+* any incoherence in the type of our expressions and sequences can be spotted at compile time,
+* we can rule out the use of partial functions, by wrapping their results in new data types, and compose values of these type.
 
 However, when a program has to process IO (as any useful program will), static types and purity might seem to get in the way for a beginner. We can use the `IO` Monad to get `IO` values, and the `Either` Monad to deal with failures, but combining the two makes our programs cumbersome. 
 
 Monad Transformers can help us write simpler programs, by hiding the boilerplate code that this combination requires.
 
 In this blog post I present how to chain monadic actions and controls with the `ExceptT` Monad Transformer in Haskell through a small example, in 4 steps:
-- writing a naïve implementation, which halts on IO exception
-- improving its robustness with conditionals and pattern matching
-- combining `IO` and `Either` using `ExceptT` 
-- refactoring the program's chaining of actions
+* writing a naïve implementation, which halts on IO exception
+* improving its robustness with conditionals and pattern matching
+* combining `IO` and `Either` using `ExceptT` 
+* refactoring the program's chaining of actions
  
-## Program #1: A naive solution
+## Program #1: A naïve solution
 
-Let's say we want to write a program that reads a csv file containing transactions, which are composed of a category and an amount, and prints the total amount for each category.
+Let's say we want to write a program that reads a csv file containing transactions, which are composed of a category and an amount, and prints the total spent for each category.
 
 For instance, given a file `transactions.csv` containing this data:
 ```
@@ -29,7 +29,6 @@ Interest, 38.17
 Groceries, 30.00
 Equipment, 179.00
 ```
-
 the command `summary transactions.csv` will output this:
 ```
 Equipment, 211.0
@@ -40,30 +39,27 @@ Savings, 500.0
 
 Our program will 
 
-- obtain the name of a file from the command line,
-- read this file, splitting each line into _category_ and _amount_, so as to create _transactions_
-- sort and group these _transactions_ by _category_, 
-- sum these groups into _summary lines_
-- and finally print these lines
+* obtain the name of a file from the command line,
+* read this file, splitting each line into /category/ and /amount/, so as to create /transactions/
+* sort and group these /transactions/ by /category/, 
+* sum these groups into /summary lines/
+* and finally print these lines
 
-Thus we’ll need to import the following functions:
+First, some funtions should be imported, then we define adequate data types for our program.
 ```haskell
 import System.Environment ( getArgs )
 import Data.List          ( groupBy
                           , sortBy  )
 import Data.Function      ( on )
-```
-Let’s define adequate data types for our program. A _Category_ can be created by simply using a `String` as the label.
-
-```haskell
 
 data Category = Category { categoryLabel :: String }
     deriving (Eq, Show)
 ```
-We need a way to `read` a `Category` from a `String`, so let's make this type an instance of the `Read` class. Parsing a category label amounts to reading alphanumeric chars and possibly spaces, and rejecting everything else. 
-For intance `"Credit Cards Payments"` and `"1st aid kit"` are valid categories, while `"( wrong !)"` isn't.
 
-`readsPrec` is the function that we need to implement. It has the signature ` :: Int -> String -> [(a,String)]` where the first argument is the precedence level (which we don't need to specify for our simple program), the second argument is the `String` to be parsed, and the result is a list of possible results. An empty list means that the string cannot be parsed to a value of the given type. 
+We need a way to `read` a `Category` from a `String`, so let's make this type an instance of the `Read` class. Parsing a category label amounts to reading alphanumeric chars and possibly spaces, and rejecting everything else. 
+For instance `"Credit Cards Payments"` and `"1st aid kit"` are valid categories, while `"( wrong !)"` isn't.
+
+`readsPrec` is the function that we need to implement. It has the signature ` :: Int -> String -> [(a,String)]` where the first argument is the precedence level (which we don't need to specify for our simple program), the second argument is the `String` to be parsed, and the result is a list of possible results. Returning An empty list means that the input string could not be parsed to create a value of our type.
 
 ```haskell
 instance Read Category where
@@ -75,8 +71,9 @@ instance Read Category where
         rest  = drop (length label) s
         isLegal c = isAlphaNum c || c == ' '
 ```
-Examining the input string, `readsPrec` takes all its legal characters and returns a `Category` value and the remaining chararcters, or the empty list if not a legal character was found. 
-Let's try to `read` a `Category` using _ghci_:
+The function takes all the legal characters in the input string `s` to form the label of a `Category` value which it returns, coupled with the part of the input string that is remaining. Or it returns an empty list if no legal character was found at the beginning of the input string.
+
+Let's try to `read` a `Category` using /ghci/:
 ```
 > import Program1.hs ⏎
 > read "Foo" :: Category ⏎
@@ -88,7 +85,8 @@ Category "Foo"
 (reads :: ReadS Category) "Bar, 42" ⏎
 [(Category "Bar",",42")]
 ```
-`Transaction` it composed with a `Category` and a `Double`. Since we want to `read` transactions, we need to implement `readsPrec` for this type as well.
+
+A `Transaction` is composed with a `Category` and a `Double`. Since we want to `read` transactions, we need to implement `readsPrec` for this type as well. 
 ```haskell
 data Transaction = Transaction { transactionCategory :: Category
                                , transactionAmount   :: Double }
@@ -106,7 +104,15 @@ instance Read Transaction where
                             ((",",r):_) -> return (",",r)
                             _           -> []
 ```
-`readsPrec` is chaining computations on the list monad: it first reads a `Category`, then a comma (discarding it), then a `Double` value. Chaining these three parsers ensures that the evaluation will result in an empty list as soon as one of the three parsers returns an empty list.
+
+`This` `readsPrec` is a bit more complicated: it is chaining computations on the list monad, reading first a `Category`, then a comma (and discarding it), then a `Double` value. Chaining these three parsers ensures that the evaluation will result in an empty list as soon as one of the three parsers returns an empty list.
+
+
+☞ /(To illustrate the effect of failure in a chain of list actions try this expression in ghci:/
+`[1,2,3] >>= \n -> [n,n*10,n*100] >>= \m -> [m*m,m*m*m]` 
+/then try it again, replacing any of the three lists by the empty list.)/
+
+We can try our transaction parser on ghci:
 
 ```
 > read "Foo, 42" :: Transaction ⏎
@@ -186,10 +192,10 @@ Savings, 500.0
 
 It is, indeed, a very naive program. What could go wrong? 
 
-- we could forget to specify a file name when lauching the program from the command line
-- we could specify a file name that doesn't correspond to an existing file
-- the file could contain data that can't be read as comma separated transaction values
-- the file could be empty, in which case nothing would be output
+* we could forget to specify a file name when lauching the program from the command line
+* we could specify a file name that doesn't correspond to an existing file
+* the file could contain data that can't be read as comma separated transaction values
+* the file could be empty, in which case nothing would be output
 
 ```
 $ program1 ⏎
@@ -210,15 +216,15 @@ None of these conditions is adequately managed by our program, which means that 
 
 We want to deal with failure conditions in a graceful way. Our program should not stop abruptly with a strange message like `no parse`, but instead not print a clear diagnostic, and possibly propose a way for the user to remedy the condition.
 
-What parts of the program should change? Well, every part where the program calls a function that is not _total_. A function is said to be total if it returns a result for each possible value of its argument.
+What parts of the program should change? Well, every part where the program calls a function that is not /total/. A function is said to be total if it returns a result for each possible value of its argument.
 
-For example, `head` in the expression `content <- readFile (head args)` is not total and could halt the program, with an _"empty list"_ message. On the other hand, the function:
+For example, `head` in the expression `content <- readFile (head args)` is not total and could halt the program, with an /"empty list"/ message. On the other hand, the function:
 ```haskell
 lookup :: Eq a => a -> [(a, b)] -> Maybe b
 ```
-for example _is_ a total function, and will not interrupt the program. 
+for example /is/ a total function, and will not interrupt the program. 
 
-☞ _(`head` is used inside the function `summary` in the expression `transactionCategory . head`. Does it constitute a risk of halting the program in case we apply it on an empty list? Why?)_
+☞ /(`head` is used inside the function `summary` in the expression `transactionCategory . head`. Does it constitute a risk of halting the program in case we apply it on an empty list? Why?)/
 
 If a function is not total, one safe way to use it is to combine it with a data type that can represent failure. The `Either` type constructor is just designed for such representations, and we will us it. To make things a bit clearer, let's first define a type synonym for the `String` used as messages.
 ```haskell
@@ -247,15 +253,15 @@ getFileContent fp = (fmap Right $ readFile fp) `catch` handle
     handle = return . Left . ("Error: " ++) . show
 ```
 The `catch :: IOException e => IO a -> (e -> IO a) -> IO a` function is our "graceful exit" instrument here: given an IO action and a handler function, it will catch any IO exception, returning the result of applying the handler on the exception. In our case, what we want to do with the exception is :
-- `show` it into a `String` starting with `"Error: "`,
-- make this message a `Left` value, 
-- `return` this left value, making it an `IO (Either Message String)`
+* `show` it into a `String` starting with `"Error: "`,
+* make this message a `Left` value, 
+* `return` this left value, making it an `IO (Either Message String)`
 
 In the case when no exception is triggered, `readFile` will give us an `IO String` value. What we do is to make that value an `Either Message String` by mapping the `Right` constructor to it.
 
 Note that our function returns a `IO (Either Message String)` value. Why not return a `Either Message String` instead? Because there is no safe way to convert an IO value into a non-IO value. Any function dealing with IO is partial, not total, because IO actions are always prone to some failure condition. If we could compile a function with signature `IO a -> a` then two things would happen:
-- Haskell's type checker would be much less useful to detect problems in our constructions,
-- we would be hiding to ourselves some crucial concern with our program reliability.
+* Haskell's type checker would be much less useful to detect problems in our constructions,
+* we would be hiding to ourselves some crucial concern with our program reliability.
 
 Anyway, the fact that `getFileContent` returns a `IO` value should not be a problem, because it will be used within the context of an IO action and nowhere else.
 
@@ -344,7 +350,7 @@ program2 = do
 ```
 This chaining of controls could give the impression that we've missed an opportunity to simplify the code of the whole function, by equally chaining the values obtained by `getFileNameArg` and `getFileContent`. Instead we used explicit `case ... of` branching.
 
-Question: Could it be possible to chain _all_ our `Either Message a` functions, like this ?
+Question: Could it be possible to chain /all/ our `Either Message a` functions, like this ?
 
 ```haskell
 wrong_program2 :: IO () -- won't compile
@@ -356,7 +362,7 @@ wrong_program2 = do
                Left msg -> putStrLn msg
                Right txs -> putStrLn $ unlines $ map show $ summarize txs
 ```
-Answer: No. _ghc_ has no less than 6 complaints about this change to the function. Here's the first one:
+Answer: No. /ghc/ has no less than 6 complaints about this change to the function. Here's the first one:
 
 ```
     • Couldn't match type ‘Either Message String’ with ‘[Char]’
@@ -396,7 +402,7 @@ Of course, it would be nice if we could...
 
 ## 4. Combining Monads with Monad Transformers
 
-What we need in order to simplify the code is the ability to chain `Either` actions _inside_ the `IO` monad. 
+What we need in order to simplify the code is the ability to chain `Either` actions /inside/ the `IO` monad. 
 
 This is exactly what the [`Control.Monad.Trans.Except`](https://hackage.haskell.org/package/transformers-0.5.6.2/docs/Control-Monad-Trans-Except.html) library is offering us:
 
@@ -413,12 +419,12 @@ This is exactly what the [`Control.Monad.Trans.Except`](https://hackage.haskell.
 > 
 > `ExceptT` constructs a monad parameterized over two things:
 > 
-> - _e_ - The exception type.
-> - _m_ - The inner monad.
+> - /e/ - The exception type.
+> - /m/ - The inner monad.
 > 
 > The `return` function yields a computation that produces the given value, while `>>=` sequences two subcomputations, exiting on the first exception.
 
-Let's experiment on _ghci_. We start with importing our program, and the module.
+Let's experiment on /ghci/. We start with importing our program, and the module.
 
 ```
 >  import Program2.hs
@@ -520,12 +526,12 @@ import Control.Monad.Trans.Class ⏎
 ```
 
 What we have done so far: 
-- we have composed together an "either" monad with the IO monad, using the `ExceptT` monad transformer,
-- we can hold values and extract them into an `Either` data type,
-- which means we can chain monadic functions on these values and benefit from the built in of bind (`>>=`) for `Either` values,
-- when a function leads to failure, the chaining is shortcut and we get a `Left` value,  
-- we can also get values from IO operations, without having to use a distinct monad, by `lift`ing these operation into the `ExceptT` monad.
-- thanks to exception `catch`ing, when a failure occurs on the IO operation, we also get a `Left` values.
+* we have composed together an "either" monad with the IO monad, using the `ExceptT` monad transformer,
+* we can hold values and extract them into an `Either` data type,
+* which means we can chain monadic functions on these values and benefit from the built in of bind (`>>=`) for `Either` values,
+* when a function leads to failure, the chaining is shortcut and we get a `Left` value,  
+* we can also get values from IO operations, without having to use a distinct monad, by `lift`ing these operation into the `ExceptT` monad.
+* thanks to exception `catch`ing, when a failure occurs on the IO operation, we also get a `Left` values.
 
 ## Program #3: A chain of actions that can fail gracefully
 
