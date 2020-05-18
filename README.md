@@ -129,7 +129,7 @@ type SummaryLine = Transaction
 display :: Transaction -> String
 display t = categoryLabel (transactionCategory t) 
            ++ ", " ++ show (transactionAmount t)
-           ```
+```
 
 
 To summarize the transactions, we sort them by category, group them by category, and for each group, create a `SummaryLine` with the category and total amount of the group:
@@ -408,9 +408,9 @@ This is exactly what the [`Control.Monad.Trans.Except`](https://hackage.haskell.
 > 
 > A sequence of actions terminates normally, producing a value, only if none of the actions in the sequence throws an exception. If one throws an exception, the rest of the sequence is skipped and the composite action exits with that exception.
 > 
-> ```haskell
+```haskell
 > newtype ExceptT e m a
-> ```
+```
 > A monad transformer that adds exceptions to other monads.
 > 
 > `ExceptT` constructs a monad parameterized over two things:
