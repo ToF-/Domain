@@ -40,9 +40,9 @@ Savings, 500.0
 Our program will 
 
 * obtain the name of a file from the command line,
-* read this file, splitting each line into /category/ and /amount/, so as to create /transactions/
-* sort and group these /transactions/ by /category/, 
-* sum these groups into /summary lines/
+* read this file, splitting each line into *category* and *amount*, so as to create *transactions*
+* sort and group these *transactions* by *category*, 
+* sum these groups into *summary lines*
 * and finally print these lines
 
 First, some funtions should be imported, then we define adequate data types for our program.
@@ -73,7 +73,7 @@ instance Read Category where
 ```
 The function takes all the legal characters in the input string `s` to form the label of a `Category` value which it returns, coupled with the part of the input string that is remaining. Or it returns an empty list if no legal character was found at the beginning of the input string.
 
-Let's try to `read` a `Category` using /ghci/:
+Let's try to `read` a `Category` using *ghci*:
 ```
 > import Program1.hs ⏎
 > read "Foo" :: Category ⏎
@@ -108,9 +108,9 @@ instance Read Transaction where
 `This` `readsPrec` is a bit more complicated: it is chaining computations on the list monad, reading first a `Category`, then a comma (and discarding it), then a `Double` value. Chaining these three parsers ensures that the evaluation will result in an empty list as soon as one of the three parsers returns an empty list.
 
 
-☞ /(To illustrate the effect of failure in a chain of list actions try this expression in ghci:/
+☞ *(To illustrate the effect of failure in a chain of list actions try this expression in ghci:*
 `[1,2,3] >>= \n -> [n,n*10,n*100] >>= \m -> [m*m,m*m*m]` 
-/then try it again, replacing any of the three lists by the empty list.)/
+*then try it again, replacing any of the three lists by the empty list.)*
 
 We can try our transaction parser on ghci:
 
@@ -216,15 +216,15 @@ None of these conditions is adequately managed by our program, which means that 
 
 We want to deal with failure conditions in a graceful way. Our program should not stop abruptly with a strange message like `no parse`, but instead not print a clear diagnostic, and possibly propose a way for the user to remedy the condition.
 
-What parts of the program should change? Well, every part where the program calls a function that is not /total/. A function is said to be total if it returns a result for each possible value of its argument.
+What parts of the program should change? Well, every part where the program calls a function that is not *total*. A function is said to be total if it returns a result for each possible value of its argument.
 
-For example, `head` in the expression `content <- readFile (head args)` is not total and could halt the program, with an /"empty list"/ message. On the other hand, the function:
+For example, `head` in the expression `content <- readFile (head args)` is not total and could halt the program, with an *"empty list"* message. On the other hand, the function:
 ```haskell
 lookup :: Eq a => a -> [(a, b)] -> Maybe b
 ```
-for example /is/ a total function, and will not interrupt the program. 
+for example *is* a total function, and will not interrupt the program. 
 
-☞ /(`head` is used inside the function `summary` in the expression `transactionCategory . head`. Does it constitute a risk of halting the program in case we apply it on an empty list? Why?)/
+☞ *(`head` is used inside the function `summary` in the expression `transactionCategory . head`. Does it constitute a risk of halting the program in case we apply it on an empty list? Why?)*
 
 If a function is not total, one safe way to use it is to combine it with a data type that can represent failure. The `Either` type constructor is just designed for such representations, and we will us it. To make things a bit clearer, let's first define a type synonym for the `String` used as messages.
 ```haskell
@@ -350,7 +350,7 @@ program2 = do
 ```
 This chaining of controls could give the impression that we've missed an opportunity to simplify the code of the whole function, by equally chaining the values obtained by `getFileNameArg` and `getFileContent`. Instead we used explicit `case ... of` branching.
 
-Question: Could it be possible to chain /all/ our `Either Message a` functions, like this ?
+Question: Could it be possible to chain *all* our `Either Message a` functions, like this ?
 
 ```haskell
 wrong_program2 :: IO () -- won't compile
@@ -362,7 +362,7 @@ wrong_program2 = do
                Left msg -> putStrLn msg
                Right txs -> putStrLn $ unlines $ map show $ summarize txs
 ```
-Answer: No. /ghc/ has no less than 6 complaints about this change to the function. Here's the first one:
+Answer: No. *ghc* has no less than 6 complaints about this change to the function. Here's the first one:
 
 ```
     • Couldn't match type ‘Either Message String’ with ‘[Char]’
@@ -402,7 +402,7 @@ Of course, it would be nice if we could...
 
 ## 4. Combining Monads with Monad Transformers
 
-What we need in order to simplify the code is the ability to chain `Either` actions /inside/ the `IO` monad. 
+What we need in order to simplify the code is the ability to chain `Either` actions *inside* the `IO` monad. 
 
 This is exactly what the [`Control.Monad.Trans.Except`](https://hackage.haskell.org/package/transformers-0.5.6.2/docs/Control-Monad-Trans-Except.html) library is offering us:
 
@@ -419,12 +419,12 @@ This is exactly what the [`Control.Monad.Trans.Except`](https://hackage.haskell.
 > 
 > `ExceptT` constructs a monad parameterized over two things:
 > 
-> - /e/ - The exception type.
-> - /m/ - The inner monad.
+> - *e* - The exception type.
+> - *m* - The inner monad.
 > 
 > The `return` function yields a computation that produces the given value, while `>>=` sequences two subcomputations, exiting on the first exception.
 
-Let's experiment on /ghci/. We start with importing our program, and the module.
+Let's experiment on *ghci*. We start with importing our program, and the module.
 
 ```
 >  import Program2.hs
