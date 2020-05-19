@@ -419,9 +419,9 @@ This is exactly what the [`Control.Monad.Trans.Except`](https://hackage.haskell.
 > 
 > A sequence of actions terminates normally, producing a value, only if none of the actions in the sequence throws an exception. If one throws an exception, the rest of the sequence is skipped and the composite action exits with that exception.
 > 
-```haskell
+> ```haskell
 > newtype ExceptT e m a
-```
+> ```
 > A monad transformer that adds exceptions to other monads.
 > 
 > `ExceptT` constructs a monad parameterized over two things:
