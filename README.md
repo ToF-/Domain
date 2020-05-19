@@ -432,14 +432,14 @@ This is exactly what the [`Control.Monad.Trans.Except`](https://hackage.haskell.
 > The `return` function yields a computation that produces the given value, while `>>=` sequences two subcomputations, exiting on the first exception.
 >
 > ```haskell
-> `throwE :: Monad m => e -> ExceptT e m a`
+> throwE :: Monad m => e -> ExceptT e m a
 > ```
 >
 > Signal an exception value *e*.
 > 
 > ```haskell
-> `runExceptT (throwE e) = return (Left e)`
-> `throwE e >>= m = throwE e`
+> runExceptT (throwE e) = return (Left e)
+> throwE e >>= m = throwE e
 > ```
 
 Let's experiment on *ghci*. We start with importing our program, and the module.
