@@ -322,7 +322,7 @@ Investment, 6007.0
 Savings, 500.0
 ```
 ## 3. Monadic actions as isolated contexts
-The bind operation used in the `case .. of` instruction: 
+The bind operator (`>>=`) used in the `case .. of` instruction: 
 ```haskell
             ...
             content <- getfilecontent fp
@@ -430,6 +430,13 @@ This is exactly what the [`Control.Monad.Trans.Except`](https://hackage.haskell.
 > - *m* - The inner monad.
 > 
 > The `return` function yields a computation that produces the given value, while `>>=` sequences two subcomputations, exiting on the first exception.
+>
+> `throwE :: Monad m => e -> ExceptT e m a`
+>
+> Signal an exception value *e*.
+> 
+> `runExceptT (throwE e) = return (Left e)`
+> `throwE e >>= m = throwE e`
 
 Let's experiment on *ghci*. We start with importing our program, and the module.
 
@@ -438,21 +445,26 @@ Let's experiment on *ghci*. We start with importing our program, and the module.
 >  import Control.Monad.Trans.Except
 ```
 
-Let' try to create a pure `ExecptT Message IO [Transaction]` value, with the `ExceptT` constructor:
+Let's try to create a pure `ExecptT Message IO [Transaction]` value using the `ExceptT` constructor:
 ```
 value = ExceptT $ return $ Right $ [Transaction (Category "Groceries") 42.0] ⏎
 
 :type value ⏎
 value :: Monad m => ExceptT e m [Transaction]
 ```
-Now let's create a function to get a list of transactions from a file:
+Now let's create a function to get a list of transactions from a file. That amounts to:
+* read the file and have its content in an `IO String`
+* apply `readTransactions` to this value, which gets us a `IO (Either Message String)`
+* wrap this into an `ExceptT` value
 ```
 fromFile = ExceptT . fmap readTransactions . readFile ⏎
 
 :type fromFile ⏎
 fromFile :: FilePath -> ExceptT Message IO [Transaction]
 ```
-Extracting the value is done with `runExceptT`:
+This seems promising: we get the same result type whether our value comes from a constant or from reading a file!
+
+Extracting the value from an `ExceptT` context is done via `runExceptT`:
 ```
 runExceptT value ⏎
 Right [Transaction {transactionCategory = Category {categoryLabel = "Groceries"}, transactionAmount = 42.0}]
@@ -462,7 +474,7 @@ Right [Transaction {transactionCategory = Category {categoryLabel = "Groceries"}
 . . .
 ,Transaction {transactionCategory = Category {categoryLabel = "Equipment"}, transactionAmount = 179.0}]
 ```
-Naturally our function doesn't handle exceptions :
+Naturally our function doesn't handle exceptions yet:
 ```
 > runExceptT $ fromFile "foo" ⏎
 *** Exception: foo: openFile: does not exist (No such file or directory)
@@ -477,7 +489,7 @@ Left "foo: openFile: does not exist (No such file or directory)"
 ```
 And now our function handles exceptions correctly. 
 
-Another example of how `ExceptT` makes `IO` and `Either` working together seamlessly: one of our functions extracts the csv file name from the arguments provided on the command line, returning a `Left` if no argument was given. Could it instead prompt the user for a file name?
+Another case where we want to have `IO` and `Either` working together seamlessly is about extracting the csv file name from the arguments provided on the command line, returning a `Left` if no argument was given. Could we instead prompt the user for a file name?
 
 Let's write a prompt function:
 ```
@@ -501,7 +513,7 @@ Right "data/transactions.csv"
 
 >
 ```
-This works beautifully: in one case we convert an `IO String` into an `IO (Either Message String)` and then nest that value into an `ExceptT`. In the other case we nest a `Right` value into `IO` (getting also an `IO (Either Message String)`) and also nest that value into an `ExceptT`.
+In one case we convert an `IO String` into an `IO (Either Message String)` and then nest that value into an `ExceptT`. In the other case we nest a `Right` value into `IO` (getting also an `IO (Either Message String)`) and also nest that value into an `ExceptT`.
 
 But all this converting is tedious. First, since `ExceptT` is a monad, it offers a `return` function. Let' use it.
 
@@ -531,14 +543,14 @@ import Control.Monad.Trans.Class ⏎
 What we have done so far: 
 * we have composed together an "either" monad with the IO monad, using the `ExceptT` monad transformer,
 * we can hold values and extract them into an `Either` data type,
-* which means we can chain monadic functions on these values and benefit from the built in of bind (`>>=`) for `Either` values,
+* which means we can chain monadic functions on these values and benefit from the builtin bind (`>>=`) operation for `Either` values,
 * when a function leads to failure, the chaining is shortcut and we get a `Left` value,  
-* we can also get values from IO operations, without having to use a distinct monad, by `lift`ing these operation into the `ExceptT` monad.
-* thanks to exception `catch`ing, when a failure occurs on the IO operation, we also get a `Left` values.
+* we can also get values from IO operations, without having to use a distinct monad, by `lift`ing these operations into the `ExceptT` monad.
+* thanks to exception `catch`ing, when a failure occurs on the IO operation, we also get a `Left` value.
 
 ## Program #3: A chain of actions that can fail gracefully
 
-Let's integrate these ideas into our program.
+Let's integrate what we learned into our program.
 ```haskell
 import Control.Monad.Trans.Except ( ExceptT (..)
                                   , runExceptT
@@ -551,7 +563,7 @@ import Control.Monad.Trans.Class     ( lift )
 ```haskell
 type Domain = ExceptT Message IO
 ```
-We can rewrite our conversion and control functions, using `throwE :: Monad m => e -> ExceptT e m a` instead of `Left`:
+We can rewrite our conversion and control functions, using `throwE` instead of `Left`:
 ```haskell
 readTransaction :: String -> Domain Transaction
 readTransaction s = 
@@ -582,7 +594,7 @@ getFileNameArg = do
     promptForFileName :: IO String
     promptForFileName = putStrLn "please enter a file name:" >> getLine
 ```
-Dealing with IO exception implies using and wraping the `catch` expression into the `ExceptT` monad:
+Dealing with IO exception implies using and wrapping the `catch` expression into the `ExceptT` monad:
 ```haskell
 getFileContent :: FilePath -> Domain String
 getFileContent fp = ExceptT $ (readFileE fp) `catch` handleE
@@ -593,7 +605,7 @@ getFileContent fp = ExceptT $ (readFileE fp) `catch` handleE
     handleE :: IOException -> IO (Either Message String)
     handleE = return . Left . show
 ```
-Note that we use the `<$>` an infix shortcut for `fmap`, since we need to apply the `Right` function into the IO value that `readFile` aquired.
+Note that we use the `<$>` (an infix shortcut for `fmap`), since we need to apply the `Right` function into the IO value that `readFile` aquired.
 
 Now we can chain all these acquiring and controlling functions into a single one:
 ```haskell
@@ -606,7 +618,7 @@ getTransactions = do
     transactions <- mapM checkNonZero notEmpty
     return $ transactions
 ```
-Of course, using variables and left arrow is one way to make the chaining of action explicit. Another way is to use the bind operator:
+Of course, using variables and left arrows is one way to make the chaining of action explicit. Another way is to use the bind operator:
 ```haskell
 getTransactions :: Domain [Transaction]
 getTransactions  = getFileNameArg 
@@ -622,7 +634,7 @@ report :: Either Message [SummaryLine] -> String
 report (Left msg)   = "Error: " ++ msg
 report (Right sums) = unlines $ map showSummaryLine sums
 ```
-Our main program will get the transactions, summarize them, and print the report:
+As usual the main program will get the transactions, summarize them, and print the report:
 ```haskell
 program3 :: IO ()
 program3 = do
@@ -634,8 +646,21 @@ main = program3
 ```
 Again, `<$>` is used instead of `$`: since `transactions` is bound to an `Either Message [Transaction]` value, we have to map `summarize` to its value instead of just applying it.
 
+```
+$ ghc --make program3.hs ⏎
+$ program3 ⏎
+please enter a file name: 
+data/transactions.csv ⏎
+Equipment, 211.0
+Groceries, 172.0
+Interest, 38.17
+Savings, 500.0
+```
+
 ## Conclusion
 
 In this blog post, we went from a naïve haskell program doing IOs, to a less naïve implementation that deals with exceptions and failures, while trying to keep the program flow simple and the amount of boiler plate to a minimum. I hope you enjoyed it and learned from it. I would greatly appreciate feedback! You can write me at cthibauttof@gmail.com or send me a direct message on Twitter: @ToF_.
 
 The distinct versions of the program can be found on [github](https://github.com/ToF-/Domain)
+
+Enjoy!
