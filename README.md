@@ -530,7 +530,9 @@ But all this converting is tedious. First, since `ExceptT` is a monad, it offers
 ```
 Secondly, the combination `ExceptT . fmap Right` can be done using a general function found in `Control.Monad.Trans.Class`: 
 
-> `lift :: Monad m => m a -> t m a`
+> ```haskell
+> lift :: Monad m => m a -> t m a
+> ```
 > 
 > Lift a computation from the argument monad to the constructed monad.
 > 
