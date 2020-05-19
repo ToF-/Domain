@@ -66,8 +66,8 @@ instance Read Category where
     readsPrec _ s = if not (null label) 
                        then return (Category label, rest) 
                        else []
-        where 
         label = takeWhile (isLegal) s
+        where 
         rest  = drop (length label) s
         isLegal c = isAlphaNum c || c == ' '
 ```
@@ -112,8 +112,7 @@ instance Read Transaction where
 `[1,2,3] >>= \n -> [n,n*10,n*100] >>= \m -> [m*m,m*m*m]` 
 *then try it again, replacing any of the three lists by the empty list.)*
 
-We can try our transaction parser on ghci:
-
+Trying our parser on *ghci*:
 ```
 > read "Foo, 42" :: Transaction ⏎
 Transaction {transactionCategory = Category "Foo", transactionAmount = 42.0}
@@ -125,9 +124,7 @@ Transaction {transactionCategory = Category "Foo", transactionAmount = 42.0}
 *** Exception: Prelude.read: no parse
 >
 ```
-Since a *summary line* has the exact same structure as a *transaction*, we choose to define it as a type synonym.
-
-Also we should be able to `display` summary lines:
+Now for the summary: since a *summary line* has the exact same structure as a *transaction*, we choose to define it as a type synonym. Also we should be able to `display` summary lines.
 
 ```haskell
 type SummaryLine = Transaction
@@ -137,7 +134,7 @@ display t = categoryLabel (transactionCategory t)
            ++ ", " ++ show (transactionAmount t)
 ```
 
-To *summarize* the transactions is to sort them by category, group them by category, and for each group, create a `SummaryLine` with the category and total amount of the group:
+To *summarize* the transactions is to sort and group them by category, then for each group, create a `SummaryLine` with the category and total amount of the group:
 ```haskell
 type SummaryLine = Transaction
 
@@ -167,7 +164,7 @@ on compare transactionCategory :: Transaction -> Transaction -> Ordering
 ```
 which is conform to the type of function required by `sortBy`. Similarly, `on` composed with `(==)` will create a function of the type required by `groupBy`.
 
-Reporting summary lines is done by mapping our `display` function for each line, and then `unline`ing, i.e. merging this list of `String`s into one single `String`:
+Reporting summary lines is done by mapping our `display` function for each line, and then merging this list of `String`s into one single `String`:
 ```haskell
 report :: [SummaryLine] -> String
 report = unlines . map display
@@ -184,6 +181,7 @@ program1 = do
 ```
 Et voilà, we have our program:
 ```
+$ ghc --make program1.hs ⏎
 $ program1 data/transactions.csv ⏎
 Equipment, 211.0
 Groceries, 172.0
@@ -191,7 +189,7 @@ Interest, 38.17
 Savings, 500.0
 ```
 
-It is, indeed, a very naïve program. What could go wrong? 
+It is, indeed, a very naïve program. Let's see what could go wrong:
 
 * we could forget to specify a file name when lauching the program from the command line
 * we could specify a file name that doesn't correspond to an existing file
@@ -215,22 +213,26 @@ None of these conditions is adequately managed, which means that given certain i
 
 ## Program #2: responding to failure conditions
 
-We want to deal with failure conditions in a graceful way. Our program should not stop abruptly with a strange message like `no parse`, but instead not print a clear diagnostic, and possibly propose a way for the user to remedy the condition.
+We want to deal with failure conditions in a graceful way. Our program should not stop abruptly with a strange message like *"empty list"* or *"no parse"*, but instead print a clear diagnostic, and possibly propose a way for the user to remedy the problem.
 
-What parts of the program should change? Well, every part where the program calls a function that is not *total*. A function is said to be total if it returns a result for each possible value of its argument.
+What parts of the program should change? Well, every part where the program calls a function that is not *total*. A function is said to be total if it returns a value for each possible value of its argument.
 
-For example, `head` in the expression `content <- readFile (head args)` is not total and could halt the program, with an *"empty list"* message. On the other hand, the function:
+The function `head`, used in the expression `content <- readFile (head args)` is not total and could halt the program with an *"empty list"* message. 
+The function `read` is also partial: it will halt the program if the string its supposed to convert into a value is not correct.
+
+On the other hand, the function:
 ```haskell
 lookup :: Eq a => a -> [(a, b)] -> Maybe b
 ```
-for example *is* a total function, and will not interrupt the program. 
+*is* an example of a total function. It will not interrupt the program for any of its argument possible value.
 
 ☞ *(`head` is used inside the function `summary` in the expression `transactionCategory . head`. Does it constitute a risk of halting the program in case we apply it on an empty list? Why?)*
 
-If a function is not total, one safe way to use it is to combine it with a data type that can represent failure. The `Either` type constructor is just designed for such representations, and we will us it. To make things a bit clearer, let's first define a type synonym for the `String` used as messages.
+If a function is not total, one safe way to use it is to combine it with a data type that can represent failure. The `Either` type constructor is just designed for such representations, and we will use it. To make things a bit clearer, let's first define a type synonym for the `String` used as messages.
 ```haskell
 type Message = String
 ```
+
 Our most frequent concern will be about the file data format, so let's create a reader function that will manage faulty csv data in a graceful way:
 ```haskell
 readTransaction :: String -> Either Message Transaction
@@ -242,6 +244,7 @@ readTransaction s =
 readTransactions :: String -> Either Message [Transaction]
 readTransactions = mapM readTransaction . lines
 ```
+This reader calls the `reads` function (which in turn calls the `readSprec` that we defined earlier) and wrap the result into an `Either` context. 
 The `mapM :: (Traversable t, Monad m) => (a -> m b) -> t a -> m (t b)` function is used to chain a monadic action to the elements of a structure and return a single monadic value. Here, it transposes a `[Either Message Transaction]` into an `Either Message [Transaction]`.
 
 
@@ -258,13 +261,15 @@ The `catch :: IOException e => IO a -> (e -> IO a) -> IO a` function is our "gra
 * make this message a `Left` value, 
 * `return` this left value, making it an `IO (Either Message String)`
 
-In the case when no exception is triggered, `readFile` will give us an `IO String` value. What we do is to make that value an `Either Message String` by mapping the `Right` constructor to it.
+In the case when everything is fine with the file and no exception is triggered, `readFile` will give us an `IO String` value. We make that value an `Either Message String` by mapping the `Right` constructor to it.
 
-Note that our function returns a `IO (Either Message String)` value. Why not return a `Either Message String` instead? Because there is no safe way to convert an IO value into a non-IO value. Any function dealing with IO is partial, not total, because IO actions are always prone to some failure condition. If we could compile a function with signature `IO a -> a` then two things would happen:
-* Haskell's type checker would be much less useful to detect problems in our constructions,
+Note that our function returns a `IO (Either Message String)` value. Why not simply return a `Either Message String` instead? Because there is no safe way to convert an IO value into a non-IO value. Any function dealing with IO is partial, not total, because IO actions are always prone to some failure condition. If we could compile a function with signature `IO a -> a` then two things would happen:
+* Haskell's type checker would be much less useful to detect problems in our constructions when we are using IOs,
 * we would be hiding to ourselves some crucial concern with our program reliability.
 
 Anyway, the fact that `getFileContent` returns a `IO` value should not be a problem, because it will be used within the context of an IO action and nowhere else.
+
+☞ *(There exists actually a function with type `IO a -> a`. It's called `unsafePerformIO`. Use it at your own risk)*
 
 Another IO function has to do with getting the first argument on the command line, now making the absence of argument a safe condition that will produce a `Left Message` value:
 ```haskell
@@ -276,7 +281,7 @@ getFileNameArg = do
                     else Right (args !! 0)
 ```
 
-Our main program will examine the values returned by `get`... functions and branch accordingly instead of halting:
+Here's the version 2 of the program. It will examine the values returned by `get`... functions and branch accordingly instead of halting:
 
 ```haskell
 program2 :: IO ()
@@ -294,8 +299,9 @@ program2 = do
 main :: IO ()
 main = program2
 ```
-And now our program is dealing with failures in a slightly improved way:
+And now our little  is dealing with failures in a slightly improved way:
 ```
+$ ghc --make program2.hs
 $ program2 ⏎
 Error: no file name given
 
@@ -453,11 +459,7 @@ Right [Transaction {transactionCategory = Category {categoryLabel = "Groceries"}
 
 runExceptT $ fromFile "../data/transactions.csv" ⏎
 Right [Transaction {transactionCategory = Category {categoryLabel = "Groceries"}, transactionAmount = 100.0}
-,Transaction {transactionCategory = Category {categoryLabel = "Savings"}, transactionAmount = 500.0}
-,Transaction {transactionCategory = Category {categoryLabel = "Equipment"}, transactionAmount = 32.0}
-,Transaction {transactionCategory = Category {categoryLabel = "Groceries"}, transactionAmount = 42.0}
-,Transaction {transactionCategory = Category {categoryLabel = "Interest"}, transactionAmount = 38.17}
-,Transaction {transactionCategory = Category {categoryLabel = "Groceries"}, transactionAmount = 30.0}
+. . .
 ,Transaction {transactionCategory = Category {categoryLabel = "Equipment"}, transactionAmount = 179.0}]
 ```
 Naturally our function doesn't handle exceptions :
