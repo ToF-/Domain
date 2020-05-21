@@ -4,10 +4,7 @@ title: "Scratching the surface of Monad Transformers"
 categories: Programming
 date: 17-05-2020
 ---
-Haskell makes it possible to write statically typed, purely functional programs. This gives us two interesting conveniences:
-
-* any incoherence in the type of our expressions and sequences can be spotted at compile time,
-* we can rule out the direct use of partial functions by wrapping their results in new data types, and compose values of these types.
+Haskell makes it possible to write statically typed, purely functional programs. This gives us two interesting conveniences. The first one is that any incoherence in the type of our expressions and sequences can be spotted at compile time. The second one is that we can rule out the direct use of partial functions by wrapping their results in new data types and compose expressions with values of these types.
 
 However, when a program has to process IO (as any useful program will), static typing and purity might seem to get in the way for a beginner. We use the `IO` Monad to get `IO` values, and the `Either` Monad to deal with failures, but combining the two makes our programs cumbersome. 
 
@@ -287,17 +284,16 @@ The function:
 ```haskell
 catch :: IOException e => IO a -> (e -> IO a) -> IO a
 ``` 
-is our "graceful exit" instrument here: given an IO action and a handler function, it will catch any IO exception, apply the handler to it, and return the result, yielding a legit `IO a` value.
-In our case, what we want to do with the exception is :
-* `show` it into a `String` starting with `"Error: "`,
-* make this message a `Left` value, 
+is our "graceful exit" instrument here: given an IO action and a handler function, it will catch any IO exception and apply the handler to it, which will yield a legit `IO a` value.
+
+In our case, what we want to do with the exception is:
+* `show` it into a `String` starting with `"Error: "`
+* make this message a `Left` value 
 * `return` this left value, making it an `IO (Either Message String)`
 
 In the case when everything is fine with the file and no exception is triggered, `readFile` will give us an `IO String` value. We make that value an `Either Message String` by mapping the `Right` constructor to it.
 
-Note that our function returns an `IO (Either Message String)` value. Why not simply return a `Either Message String` instead? Because there is no safe way to convert an IO value into a non-IO value. Any function dealing with IO is partial, not total, because IO actions are always prone to some failure condition. If we could compile a function with signature `IO a -> a` then two things would happen:
-* Haskell's type checker would be much less useful to detect problems in our constructions when dealing IOs,
-* we would be hiding to ourselves some crucial concern with our program reliability.
+Note that our function returns an `IO (Either Message String)` value. Why not simply return a `Either Message String` instead? Because there is no safe way to convert an IO value into a non-IO value. Any function dealing with IO is partial, not total, because IO actions are always prone to some failure condition. If we could compile a function with signature `IO a -> a` then Haskell's type checker would be much less useful to detect problems in our constructions when dealing IOs, and we would be hiding to ourselves some crucial concern with our program reliability.
 
 `IO` is an inescapable context. However, the fact that `getFileContent` returns an `IO` value should not be a problem because it will be used within the context of an IO action and nowhere else.
 
