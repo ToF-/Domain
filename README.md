@@ -1,5 +1,9 @@
-# Scratching the surface of Monad Transformers
-
+---
+layout: post
+title: "Scratching the surface of Monad Transformers"
+categories: Programming
+date: 17-05-2020
+---
 Haskell makes it possible to write statically typed, purely functional programs. This gives us two interesting conveniences:
 
 * any incoherence in the type of our expressions and sequences can be spotted at compile time,
@@ -456,10 +460,12 @@ value = ExceptT $ return $ Right $ [Transaction (Category "Groceries") 42.0] ⏎
 :type value ⏎
 value :: Monad m => ExceptT e m [Transaction]
 ```
+
 Now let's create a function to get a list of transactions from a file. That amounts to:
-* read the file and have its content in an `IO String`
-* apply `readTransactions` to this value, which gets us a `IO (Either Message String)`
-* wrap this into an `ExceptT` value
+* reading the file and have its content in an `IO String`
+* applying `readTransactions` to this value, which gets us a `IO (Either Message String)`
+* wrapping this into an `ExceptT` value
+
 ```
 fromFile = ExceptT . fmap readTransactions . readFile ⏎
 
@@ -577,7 +583,7 @@ readTransaction s =
       []        -> throwE ("incorrect csv format : " ++ s)
       ((t,_):_) -> return t
 
-readTransactions :: String -> Domain [Transaction]
+readTransactions :: String -> Domain [Transaction]
 readTransactions = mapM readTransaction . lines
 
 checkNotEmpty :: [Transaction] -> Domain [Transaction]
@@ -600,7 +606,7 @@ getFileNameArg = do
     promptForFileName :: IO String
     promptForFileName = putStrLn "please enter a file name:" >> getLine
 ```
-Dealing with IO exception implies using and wrapping the `catch` expression into the `ExceptT` monad:
+Dealing with IO exceptions implies using and wrapping the `catch` expression into the `ExceptT` monad:
 ```haskell
 getFileContent :: FilePath -> Domain String
 getFileContent fp = ExceptT $ (readFileE fp) `catch` handleE
