@@ -4,6 +4,9 @@ title: "Scratching the surface of Monad Transformers"
 categories: Programming
 date: 17-05-2020
 ---
+
+![combo](/images/design.png){:height="256px"}
+
 Haskell makes it possible to write statically typed, purely functional programs. This gives us two interesting conveniences. The first one is that any incoherence in the type of our expressions and sequences can be spotted at compile time. The second one is that we can rule out the direct use of partial functions by wrapping their results in new data types and compose expressions with values of these types.
 
 However, when a program has to process IO (as any useful program will), static typing and purity might seem to get in the way for a beginner. We use the `IO` Monad to get `IO` values, and the `Either` Monad to deal with failures, but combining the two makes our programs cumbersome. 
